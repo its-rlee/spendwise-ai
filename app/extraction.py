@@ -53,6 +53,21 @@ def extract_document(
     ocr_reader=Depends(get_ocr_reader),
     extractor=Depends(get_extractor),
 ):
+    return run_document_extraction(
+        document_id=document_id,
+        db=db,
+        s3=s3,
+        ocr_reader=ocr_reader,
+        extractor=extractor,
+    )
+
+def run_document_extraction(
+    document_id: str,
+    db: Session,
+    s3,
+    ocr_reader,
+    extractor,
+):
     document = db.get(Document, document_id)
 
     if document is None:
