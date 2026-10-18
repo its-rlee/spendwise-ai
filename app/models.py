@@ -1,8 +1,8 @@
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, Numeric, String
+from sqlalchemy import Date, Numeric, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -41,4 +41,49 @@ class Transaction(Base):
         String(3),
         default="USD",
         nullable=False
+    )
+
+
+class Document(Base):
+    __tablename__ = "documents"
+    __table_args__ = {"schema": "spendwise"}
+
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+    )
+
+    filename: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    s3_key: Mapped[str] = mapped_column(
+        String(255),
+        unique=True,
+        nullable=False,
+    )
+
+    size_bytes: Mapped[int] = mapped_column(
+        nullable=False,
+    )
+
+    sha256: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    page_count: Mapped[int] = mapped_column(
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
