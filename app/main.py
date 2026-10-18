@@ -18,6 +18,10 @@ from .schemas import (
 
 from .documents import router as documents_router
 
+from .receipts import router as receipts_router
+
+from .extraction import router as extraction_router
+
 app = FastAPI(
     title="SpendWise AI",
     description="AI-powered financial intelligence API",
@@ -25,6 +29,10 @@ app = FastAPI(
 )
 
 app.include_router(documents_router)
+
+app.include_router(receipts_router)
+
+app.include_router(extraction_router)
 
 
 class TransactionInput(BaseModel):
