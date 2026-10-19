@@ -28,6 +28,8 @@ from .auth import AuthUser, get_current_user
 
 from .ownership import get_owned_transaction
 
+from .assistant import router as assistant_router
+
 app = FastAPI(
     title="SpendWise AI",
     description="AI-powered financial intelligence API",
@@ -41,6 +43,8 @@ app.include_router(receipts_router)
 app.include_router(extraction_router)
 
 app.include_router(review_router)
+
+app.include_router(assistant_router)
 
 
 class TransactionInput(BaseModel):
