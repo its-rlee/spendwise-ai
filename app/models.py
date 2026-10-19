@@ -67,6 +67,11 @@ class Transaction(Base):
         nullable=True,
     )
 
+    user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
+    )
+
 
 
 class Document(Base):
@@ -111,6 +116,11 @@ class Document(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
+    )
+
+    user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
     )
 
 class TransactionDraft(Base):
@@ -182,3 +192,7 @@ class TransactionDraft(Base):
         mapped_column(Integer, nullable=True)
     )
 
+    user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
+    )

@@ -13,6 +13,7 @@ from app.main import app
 from app.models import Document
 from app.ocr_service import get_ocr_reader
 from app.s3_service import get_s3_client
+from tests.auth_helpers import override_current_user
 
 
 class FakeS3:
@@ -74,6 +75,7 @@ def setup_client(monkeypatch):
     app.dependency_overrides[get_ocr_reader] = (
         lambda: fake_ocr
     )
+    override_current_user()
 
     client = TestClient(app)
 

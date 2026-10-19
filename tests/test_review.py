@@ -16,6 +16,7 @@ from app.extraction_schemas import ReceiptExtraction
 from app.s3_service import get_s3_client
 from app.ocr_service import get_ocr_reader
 from app.llm_service import get_extractor
+from tests.auth_helpers import TEST_USER_ID, override_current_user
 
 
 @pytest.fixture
@@ -38,6 +39,7 @@ def review_client(monkeypatch):
         db.add(
             Document(
                 id=document_id,
+                user_id=TEST_USER_ID,
                 filename="fictional-receipt.jpg",
                 s3_key=f"receipts/{document_id}.jpg",
                 size_bytes=100,
@@ -75,6 +77,7 @@ def review_client(monkeypatch):
     app.dependency_overrides[get_extractor] = (
         lambda: object()
     )
+    override_current_user()
 
     client = TestClient(app)
 
@@ -195,6 +198,7 @@ def test_possible_duplicate_warning(review_client):
     with Session(engine) as db:
         db.add(
             Transaction(
+                user_id=TEST_USER_ID,
                 merchant="WALMART STORE",
                 amount=Decimal("85.50"),
                 transaction_date=date(2026, 10, 15),

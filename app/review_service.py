@@ -11,6 +11,7 @@ from .extraction_schemas import (
 def make_transaction_drafts(
     document_id: str,
     result: ReceiptExtraction | StatementExtraction,
+    user_id: str,
 ) -> list[TransactionDraft]:
 
     drafts = []
@@ -21,7 +22,7 @@ def make_transaction_drafts(
         if not result.merchant:
             reasons.append("Merchant requires review")
 
-        if not result.total or result.total <= 0:
+        if result.total is None or result.total <= 0:
             reasons.append("Valid total is missing")
 
         if result.purchase_date is None:
@@ -37,6 +38,7 @@ def make_transaction_drafts(
             TransactionDraft(
                 id=str(uuid4()),
                 document_id=document_id,
+                user_id=user_id,
                 source_index=0,
                 merchant=result.merchant,
                 amount=result.total,
@@ -64,14 +66,18 @@ def make_transaction_drafts(
             if row.direction == "unknown":
                 reasons.append("Direction requires review")
 
-            # The Day 5 statement schema does not
-            # yet extract a currency field.
+            # Currency isn't included in our
+            # current statement extraction schema.
             reasons.append("Currency requires review")
+
+            if result.needs_review and not result.review_reasons:
+                reasons.append("AI flagged this statement")
 
             drafts.append(
                 TransactionDraft(
                     id=str(uuid4()),
                     document_id=document_id,
+                    user_id=user_id,
                     source_index=index,
                     merchant=row.description,
                     amount=row.amount,
@@ -88,5 +94,10 @@ def make_transaction_drafts(
                     status="pending",
                 )
             )
+
+    else:
+        raise ValueError(
+            "Unsupported extraction result"
+        )
 
     return drafts

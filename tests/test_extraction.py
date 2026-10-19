@@ -20,6 +20,7 @@ from app.ocr_service import get_ocr_reader
 from app.llm_service import get_extractor
 from app.extraction_schemas import ReceiptExtraction
 from app.extraction_validation import review_receipt
+from tests.auth_helpers import TEST_USER_ID, override_current_user
 
 
 def test_invalid_negative_total():
@@ -96,6 +97,7 @@ def extraction_client(monkeypatch):
         db.add(
             Document(
                 id=document_id,
+                user_id=TEST_USER_ID,
                 filename="test.jpg",
                 s3_key=f"receipts/{document_id}.jpg",
                 size_bytes=len(sample_bytes),
@@ -122,6 +124,7 @@ def extraction_client(monkeypatch):
     app.dependency_overrides[get_extractor] = (
         lambda: FakeExtractor()
     )
+    override_current_user()
 
     client = TestClient(app)
 

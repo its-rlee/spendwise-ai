@@ -29,6 +29,9 @@ from .extraction_schemas import (
     StatementExtraction,
 )
 
+from .auth import AuthUser, get_current_user
+from .ownership import get_owned_document
+
 router = APIRouter(
     prefix="/api/v1/documents",
     tags=["AI Extraction"],
@@ -52,6 +55,7 @@ def extract_document(
     s3=Depends(get_s3_client),
     ocr_reader=Depends(get_ocr_reader),
     extractor=Depends(get_extractor),
+    user: AuthUser = Depends(get_current_user)
 ):
     return run_document_extraction(
         document_id=document_id,
@@ -59,6 +63,7 @@ def extract_document(
         s3=s3,
         ocr_reader=ocr_reader,
         extractor=extractor,
+        user_id=user.id
     )
 
 def run_document_extraction(
@@ -67,8 +72,13 @@ def run_document_extraction(
     s3,
     ocr_reader,
     extractor,
+    user_id: str,
 ):
-    document = db.get(Document, document_id)
+    document = get_owned_document(
+        db,
+        document_id,
+        user_id,
+    )
 
     if document is None:
         raise HTTPException(

@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
+from tests.auth_helpers import override_current_user
 
 
 @pytest.fixture
@@ -34,6 +35,7 @@ def client():
             yield db
 
     app.dependency_overrides[get_db] = override_get_db
+    override_current_user()
 
     try:
         with TestClient(app) as test_client:

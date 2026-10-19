@@ -25,6 +25,7 @@ from .image_service import (
 from .models import Document
 from .ocr_service import get_ocr_reader
 from .s3_service import get_s3_client
+from .auth import AuthUser, get_current_user
 
 
 router = APIRouter(
@@ -50,6 +51,7 @@ def upload_receipt(
     db: Session = Depends(get_db),
     s3=Depends(get_s3_client),
     ocr_reader=Depends(get_ocr_reader),
+    user: AuthUser = Depends(get_current_user),
 ):
     filename = PurePath(
         (file.filename or "receipt.jpg").replace(
@@ -110,7 +112,7 @@ def upload_receipt(
         ) from exc
 
     document_id = str(uuid4())
-    object_key = f"receipts/{document_id}.jpg"
+    object_key = f"receipts/{user.id}/{document_id}.jpg"
     bucket = os.environ["AWS_S3_BUCKET"]
 
     try:
@@ -130,6 +132,7 @@ def upload_receipt(
 
     document = Document(
         id=document_id,
+        user_id=user.id,
         filename=filename,
         s3_key=object_key,
         size_bytes=len(image_bytes),

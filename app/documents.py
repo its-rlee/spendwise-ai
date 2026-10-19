@@ -19,6 +19,7 @@ from .database import get_db
 from .models import Document
 from .pdf_service import extract_pdf_text
 from .s3_service import get_s3_client
+from .auth import AuthUser, get_current_user
 
 import os
 
@@ -47,6 +48,7 @@ def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     s3=Depends(get_s3_client),
+    user: AuthUser = Depends(get_current_user),
 ):
     filename = PureWindowsPath(
         file.filename or ""
@@ -92,7 +94,7 @@ def upload_document(
         file.file.close()
 
     document_id = str(uuid4())
-    object_key = f"statements/{document_id}.pdf"
+    object_key = f"statements/{user.id}/{document_id}.pdf"
 
     status = (
         "text_ready"
@@ -118,6 +120,7 @@ def upload_document(
 
     document = Document(
         id=document_id,
+        user_id=user.id,
         filename=filename,
         s3_key=object_key,
         size_bytes=len(data),

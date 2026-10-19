@@ -9,17 +9,34 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .models import Document, Transaction, TransactionDraft
-from .review_schemas import DraftRead, TransactionApproval, DraftRejection
+from .models import (
+    Transaction,
+    TransactionDraft,
+)
+from .review_schemas import (
+    DraftRead,
+    TransactionApproval,
+    DraftRejection,
+)
 from .review_service import make_transaction_drafts
 from .extraction import run_document_extraction
 from .s3_service import get_s3_client
 from .ocr_service import get_ocr_reader
 from .llm_service import get_extractor
 
+from .auth import AuthUser, get_current_user
+from .ownership import (
+    get_owned_document,
+    get_owned_draft,
+)
+
 
 router = APIRouter(tags=["Transaction Review"])
 
+
+# --------------------------------------------------
+# 1. PREPARE DOCUMENT FOR REVIEW
+# --------------------------------------------------
 
 @router.post(
     "/api/v1/documents/{document_id}/prepare",
@@ -32,18 +49,22 @@ def prepare_document(
     s3=Depends(get_s3_client),
     ocr_reader=Depends(get_ocr_reader),
     extractor=Depends(get_extractor),
+    user: AuthUser = Depends(get_current_user),
 ):
-    document = db.get(Document, document_id)
-
-    if document is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Document not found",
-        )
+    # Verify document ownership.
+    # Raises 404 if missing or owned by another user.
+    document = get_owned_document(
+        db,
+        document_id,
+        user.id,
+    )
 
     existing = db.scalar(
         select(TransactionDraft.id)
-        .where(TransactionDraft.document_id == document_id)
+        .where(
+            TransactionDraft.document_id == document_id,
+            TransactionDraft.user_id == user.id,
+        )
         .limit(1)
     )
 
@@ -53,17 +74,21 @@ def prepare_document(
             detail="Document already prepared for review",
         )
 
+    # Reuse Day 5 extraction with ownership validation.
     result = run_document_extraction(
         document_id=document_id,
         db=db,
         s3=s3,
         ocr_reader=ocr_reader,
         extractor=extractor,
+        user_id=user.id,
     )
 
+    # Assign owner to every new draft.
     drafts = make_transaction_drafts(
         document_id,
         result,
+        user.id,
     )
 
     if not drafts:
@@ -81,6 +106,7 @@ def prepare_document(
     try:
         db.add_all(drafts)
         document.status = "awaiting_review"
+
         db.commit()
 
         for draft in drafts:
@@ -103,6 +129,10 @@ def prepare_document(
     return drafts
 
 
+# --------------------------------------------------
+# 2. LIST USER'S DOCUMENT DRAFTS
+# --------------------------------------------------
+
 @router.get(
     "/api/v1/documents/{document_id}/drafts",
     response_model=list[DraftRead],
@@ -110,25 +140,30 @@ def prepare_document(
 def list_document_drafts(
     document_id: str,
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
 ):
-    document = db.get(Document, document_id)
-
-    if document is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Document not found",
-        )
+    # Check ownership before querying drafts.
+    get_owned_document(
+        db,
+        document_id,
+        user.id,
+    )
 
     statement = (
         select(TransactionDraft)
         .where(
-            TransactionDraft.document_id == document_id
+            TransactionDraft.document_id == document_id,
+            TransactionDraft.user_id == user.id,
         )
         .order_by(TransactionDraft.source_index)
     )
 
     return db.scalars(statement).all()
 
+
+# --------------------------------------------------
+# 3. APPROVE TRANSACTION DRAFT
+# --------------------------------------------------
 
 @router.post(
     "/api/v1/drafts/{draft_id}/approve",
@@ -138,19 +173,14 @@ def approve_draft(
     draft_id: str,
     data: TransactionApproval,
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
 ):
-    # Lock the draft while approving it.
-    draft = db.scalar(
-        select(TransactionDraft)
-        .where(TransactionDraft.id == draft_id)
-        .with_for_update()
+    # Ownership check + PostgreSQL row lock.
+    draft = get_owned_draft(
+        db,
+        draft_id,
+        user.id,
     )
-
-    if draft is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Draft not found",
-        )
 
     if draft.status != "pending":
         raise HTTPException(
@@ -158,11 +188,12 @@ def approve_draft(
             detail="Draft has already been processed",
         )
 
-    # Similar transactions are warnings, not
-    # automatically confirmed duplicates.
+    # Detect possible duplicates belonging ONLY
+    # to the currently authenticated user.
     similar_id = db.scalar(
         select(Transaction.id)
         .where(
+            Transaction.user_id == user.id,
             func.lower(Transaction.merchant)
             == data.merchant.lower(),
             Transaction.amount == data.amount,
@@ -178,14 +209,17 @@ def approve_draft(
         similar_id is not None
         and not data.confirm_similar
     ):
+        # Release the row lock before returning 409.
+        db.rollback()
+
         raise HTTPException(
             status_code=409,
             detail={
                 "message": "Possible duplicate transaction",
                 "existing_transaction_id": similar_id,
                 "instruction": (
-                    "Review the existing record. "
-                    "Use confirm_similar=true only if "
+                    "Review the existing transaction. "
+                    "Set confirm_similar=true only if "
                     "this is a separate real transaction."
                 ),
             },
@@ -200,6 +234,7 @@ def approve_draft(
         direction=data.direction,
         source_document_id=draft.document_id,
         source_index=draft.source_index,
+        user_id=user.id,
     )
 
     try:
@@ -211,27 +246,34 @@ def approve_draft(
 
         db.flush()
 
-        remaining = db.scalar(
+        # Count ONLY pending drafts.
+        pending_count = db.scalar(
             select(func.count(TransactionDraft.id))
             .where(
                 TransactionDraft.document_id
                 == draft.document_id,
-                TransactionDraft.status != "pending",
+                TransactionDraft.user_id == user.id,
+                TransactionDraft.status == "pending",
             )
         )
 
-        if remaining == 0:
-            document = db.get(
-                Document,
+        if pending_count == 0:
+            document = get_owned_document(
+                db,
                 draft.document_id,
+                user.id,
             )
             document.status = "processed"
 
-        # Commit transaction and draft status together.
+        transaction_id = transaction.id
+
+        # Save transaction, draft and document
+        # status atomically.
         db.commit()
 
     except IntegrityError as exc:
         db.rollback()
+
         raise HTTPException(
             status_code=409,
             detail="Transaction was already saved",
@@ -239,35 +281,38 @@ def approve_draft(
 
     except SQLAlchemyError as exc:
         db.rollback()
+
         raise HTTPException(
             status_code=503,
             detail="Could not approve transaction",
         ) from exc
 
     return {
-        "transaction_id": transaction.id,
-        "draft_id": draft.id,
+        "transaction_id": transaction_id,
+        "draft_id": draft_id,
         "status": "approved",
     }
 
 
-@router.post("/api/v1/drafts/{draft_id}/reject")
+# --------------------------------------------------
+# 4. REJECT TRANSACTION DRAFT
+# --------------------------------------------------
+
+@router.post(
+    "/api/v1/drafts/{draft_id}/reject",
+)
 def reject_draft(
     draft_id: str,
     data: DraftRejection,
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
 ):
-    draft = db.scalar(
-        select(TransactionDraft)
-        .where(TransactionDraft.id == draft_id)
-        .with_for_update()
+    # Only the owner can reject their draft.
+    draft = get_owned_draft(
+        db,
+        draft_id,
+        user.id,
     )
-
-    if draft is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Draft not found",
-        )
 
     if draft.status != "pending":
         raise HTTPException(
@@ -276,6 +321,7 @@ def reject_draft(
         )
 
     draft.status = "rejected"
+
     draft.review_reasons = [
         *draft.review_reasons,
         f"Rejected by reviewer: {data.reason}",
@@ -284,25 +330,29 @@ def reject_draft(
     try:
         db.flush()
 
-        pending = db.scalar(
+        pending_count = db.scalar(
             select(func.count(TransactionDraft.id))
             .where(
                 TransactionDraft.document_id
                 == draft.document_id,
+                TransactionDraft.user_id == user.id,
                 TransactionDraft.status == "pending",
             )
         )
 
-        if pending == 0:
-            db.get(
-                Document,
+        if pending_count == 0:
+            document = get_owned_document(
+                db,
                 draft.document_id,
-            ).status = "processed"
+                user.id,
+            )
+            document.status = "processed"
 
         db.commit()
 
     except SQLAlchemyError as exc:
         db.rollback()
+
         raise HTTPException(
             status_code=503,
             detail="Could not reject draft",
@@ -312,4 +362,3 @@ def reject_draft(
         "draft_id": draft_id,
         "status": "rejected",
     }
-

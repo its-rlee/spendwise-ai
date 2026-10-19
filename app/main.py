@@ -24,6 +24,10 @@ from .extraction import router as extraction_router
 
 from .review import router as review_router
 
+from .auth import AuthUser, get_current_user
+
+from .ownership import get_owned_transaction
+
 app = FastAPI(
     title="SpendWise AI",
     description="AI-powered financial intelligence API",
@@ -82,33 +86,17 @@ def preview_transaction(transaction: TransactionInput):
     }
 
 
-@app.post(
-    "/api/v1/transactions",
-    response_model=TransactionRead,
-    status_code=201,
-)
-def create_transaction(
-    data: TransactionCreate,
-    db: Session = Depends(get_db),
-):
-    transaction = Transaction(**data.model_dump())
-
-    db.add(transaction)
-    db.commit()
-    db.refresh(transaction)
-
-    return transaction
-
-
 @app.get(
     "/api/v1/transactions",
     response_model=list[TransactionRead],
 )
 def list_transactions(
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
 ):
     statement = (
         select(Transaction)
+        .where(Transaction.user_id == user.id)
         .order_by(Transaction.id)
         .limit(100)
     )
@@ -123,8 +111,13 @@ def list_transactions(
 def get_transaction(
     transaction_id: int,
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
 ):
-    transaction = db.get(Transaction, transaction_id)
+    transaction = get_owned_transaction(
+        db,
+        transaction_id,
+        user.id,
+    )
 
     if transaction is None:
         raise HTTPException(
@@ -143,8 +136,13 @@ def update_transaction(
     transaction_id: int,
     data: TransactionUpdate,
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
 ):
-    transaction = db.get(Transaction, transaction_id)
+    transaction = get_owned_transaction(
+        db,
+        transaction_id,
+        user.id,
+    )
 
     if transaction is None:
         raise HTTPException(
@@ -167,9 +165,13 @@ def update_transaction(
 def delete_transaction(
     transaction_id: int,
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
 ):
-    transaction = db.get(Transaction, transaction_id)
-
+    transaction = get_owned_transaction(
+        db,
+        transaction_id,
+        user.id,
+    )
     if transaction is None:
         raise HTTPException(
             status_code=404,
@@ -181,3 +183,33 @@ def delete_transaction(
 
     return Response(status_code=204)
 
+
+@app.get("/api/v1/me")
+def get_my_profile(
+    user: AuthUser = Depends(get_current_user),
+):
+    return {
+        "user_id": user.id,
+        "authenticated": True,
+    }
+
+@app.post(
+    "/api/v1/transactions",
+    response_model=TransactionRead,
+    status_code=201,
+)
+def create_transaction(
+    data: TransactionCreate,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    transaction = Transaction(
+        **data.model_dump(),
+        user_id=user.id,
+    )
+
+    db.add(transaction)
+    db.commit()
+    db.refresh(transaction)
+
+    return transaction

@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.main import app
 from app.s3_service import get_s3_client
+from tests.auth_helpers import override_current_user
 
 
 class FakeS3:
@@ -53,6 +54,7 @@ def client(monkeypatch):
     app.dependency_overrides[get_s3_client] = (
         lambda: fake_s3
     )
+    override_current_user()
 
     try:
         with TestClient(app) as test_client:
