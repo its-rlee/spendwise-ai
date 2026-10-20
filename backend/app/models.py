@@ -2,8 +2,9 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, Numeric, String, DateTime, func, Integer, Index, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Date, Numeric, String, DateTime, func, Integer, Index, ForeignKey, JSON, UniqueConstraint, Boolean 
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB
 
 from .database import Base
 
@@ -195,4 +196,70 @@ class TransactionDraft(Base):
     user_id: Mapped[str | None] = mapped_column(
         String(36),
         nullable=True,
+    )
+
+    receipt_items: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"),
+        nullable=False,
+        default=list,
+    )
+
+    items_reviewed: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    receipt_subtotal: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+    )
+
+
+class TransactionItem(Base):
+    __tablename__ = "transaction_items"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "transaction_id",
+            "line_index",
+            name="uq_transaction_item_line",
+        ),
+        {"schema": "spendwise"},
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    transaction_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "spendwise.transactions.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    line_index: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    category: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="Uncategorized",
+    )
+
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        nullable=False,
     )

@@ -38,6 +38,8 @@ class QueryPlan(BaseModel):
         "largest_expenses",
         "cash_flow",
         "unsupported",
+        "purchased_items",
+        "top_item_categories",
     ]
 
     period: Literal[
@@ -64,7 +66,7 @@ class QueryPlan(BaseModel):
             if not self.category or not self.category.strip():
                 raise ValueError("Category is required")
 
-        if self.intent == "merchant_total":
+        if self.intent in ("merchant_total", "purchased_items"):
             if not self.merchant or not self.merchant.strip():
                 raise ValueError("Merchant is required")
 

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../services/document_models.dart';
 import '../services/spendwise_api.dart';
 import 'draft_review_dialog.dart';
+import 'receipt_items_editor.dart';
 
 class DocumentReviewScreen extends StatefulWidget {
   const DocumentReviewScreen({super.key});
@@ -153,44 +154,71 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
 
     if (corrected == null || !mounted) return;
 
+    bool confirmSimilar = false;
+    bool confirmItemMismatch = false;
+
     await _run(() async {
-      try {
-        await _api.approveDraft(draft.id, corrected);
-      } on ApiException catch (error) {
-        if (error.statusCode != 409 ||
-            !error.message.contains('Possible duplicate')) {
-          rethrow;
-        }
+      while (true) {
+        try {
+          await _api.approveDraft(
+            draft.id,
+            corrected,
+            confirmSimilar: confirmSimilar,
+            confirmItemMismatch: confirmItemMismatch,
+          );
+          break;
+        } on ApiException catch (error) {
+          if (error.statusCode != 409) rethrow;
 
-        if (!mounted) return;
+          final isDuplicate = error.message.contains('Possible duplicate');
 
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Possible duplicate'),
-            content: const Text(
-              'A similar transaction already exists. '
-              'Have you checked the original document '
-              'and confirmed this is a separate purchase?',
+          final isItemMismatch = error.message.contains(
+            'Receipt item subtotal mismatch',
+          );
+
+          if (!isDuplicate && !isItemMismatch) {
+            rethrow;
+          }
+
+          if (!mounted) return;
+
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: Text(
+                isDuplicate ? 'Possible duplicate' : 'Item subtotal mismatch',
+              ),
+              content: Text(
+                isDuplicate
+                    ? 'A similar transaction exists. '
+                          'Confirm this is a separate purchase.'
+                    : 'The sum of reviewed items differs '
+                          'from the receipt subtotal. '
+                          'Check the original receipt before '
+                          'confirming.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Confirm'),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Confirm separate purchase'),
-              ),
-            ],
-          ),
-        );
+          );
 
-        if (confirm != true) return;
+          if (confirmed != true) return;
 
-        await _api.approveDraft(draft.id, corrected, confirmSimilar: true);
+          if (isDuplicate) {
+            confirmSimilar = true;
+          } else {
+            confirmItemMismatch = true;
+          }
+        }
       }
-
       await _fetchDrafts();
     });
   }
@@ -202,6 +230,29 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
 
     await _run(() async {
       await _api.rejectDraft(draft.id, reason);
+      await _fetchDrafts();
+    });
+  }
+
+  bool get _isReceipt {
+    final name = (_filename ?? '').toLowerCase();
+
+    return name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png');
+  }
+
+  Future<void> _editReceiptItems(TransactionDraftRecord draft) async {
+    final edited = await showDialog<List<Map<String, dynamic>>>(
+      context: context,
+      builder: (_) => ReceiptItemsEditor(initialItems: draft.receiptItems),
+    );
+
+    if (edited == null || !mounted) return;
+
+    await _run(() async {
+      await _api.saveDraftItems(draft.id, edited);
+
       await _fetchDrafts();
     });
   }
@@ -321,6 +372,36 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
                             child: Text(
                               'Review: '
                               '${draft.reviewReasons.join("; ")}',
+                            ),
+                          ),
+
+                        if (draft.receiptItems.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+
+                          const Text(
+                            'Purchased items',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+
+                          ...draft.receiptItems.map(
+                            (item) => Text(
+                              '${item.name} — '
+                              '${item.amount ?? "Unknown"} '
+                              '(${item.category})',
+                            ),
+                          ),
+                        ],
+
+                        if (draft.status == 'pending' && _isReceipt)
+                          OutlinedButton.icon(
+                            onPressed: _busy
+                                ? null
+                                : () => _editReceiptItems(draft),
+                            icon: const Icon(Icons.edit_note),
+                            label: Text(
+                              draft.itemsReviewed
+                                  ? 'Edit reviewed items'
+                                  : 'Review purchased items',
                             ),
                           ),
 

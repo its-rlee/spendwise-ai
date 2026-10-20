@@ -47,6 +47,20 @@ def make_transaction_drafts(
                 currency=result.currency,
                 review_reasons=list(dict.fromkeys(reasons)),
                 status="pending",
+                receipt_items=[
+                    {
+                        "name": item.name,
+                        "amount": (
+                            str(item.price)
+                            if item.price is not None
+                            else None
+                        ),
+                        "category": "Uncategorized",
+                    }
+                    for item in result.items
+                ],
+                receipt_subtotal=result.subtotal,
+                items_reviewed=False,
             )
         )
 

@@ -68,6 +68,31 @@ class OllamaQueryPlanner:
 
         "Income versus expenses?"
           => cash_flow, this_month
+
+        Additional supported intents:
+
+        - purchased_items:
+        List items purchased at a named merchant.
+        Requires a merchant filter.
+
+        - top_item_categories:
+        Find which item categories account for the
+        largest reviewed receipt-item amounts.
+
+        Examples:
+
+        "What did I buy at Walmart?"
+        => purchased_items
+            merchant=Walmart
+            period=this_month
+
+        "Which product categories cost me the most?"
+        => top_item_categories
+            period=this_month
+
+        Do not guess product details from bank statements.
+        Only use confirmed receipt-item data.
+
         """
 
         payload = {

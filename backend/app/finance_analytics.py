@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .assistant_schemas import QueryPlan
-from .models import Transaction
+from .models import Transaction, TransactionItem
 
 
 ZERO = Decimal("0.00")
@@ -210,5 +210,121 @@ def calculate_report(
             "expenses": f"{expenses:.2f}",
             "net_cash_flow": f"{net:.2f}",
         }
+
+
+    if plan.intent == "purchased_items":
+        statement = (
+            select(
+                TransactionItem.name,
+                TransactionItem.category,
+                func.sum(TransactionItem.amount),
+            )
+            .join(
+                Transaction,
+                TransactionItem.transaction_id
+                == Transaction.id,
+            )
+            .where(
+                *filters,
+                Transaction.direction == "debit",
+                func.lower(Transaction.merchant)
+                == plan.merchant.strip().lower(),
+            )
+            .group_by(
+                TransactionItem.name,
+                TransactionItem.category,
+            )
+            .order_by(
+                func.sum(TransactionItem.amount).desc()
+            )
+            .limit(plan.limit)
+        )
+
+        rows = [
+            {
+                "name": name,
+                "category": category,
+                "amount": f"{amount:.2f}",
+            }
+            for name, category, amount
+            in db.execute(statement)
+        ]
+
+        if not rows:
+            answer = (
+                f"No reviewed receipt items found "
+                f"at {plan.merchant} during {period_label}."
+            )
+        else:
+            summary = "; ".join(
+                f"{row['name']}: ${row['amount']}"
+                for row in rows
+            )
+
+            answer = (
+                f"Recorded purchases at {plan.merchant} "
+                f"during {period_label}: {summary}."
+            )
+
+        return answer, {
+            "currency": "USD",
+            "items": rows,
+        }
+
+
+    if plan.intent == "top_item_categories":
+        category_sum = func.sum(
+            TransactionItem.amount
+        )
+
+        statement = (
+            select(
+                TransactionItem.category,
+                category_sum,
+            )
+            .join(
+                Transaction,
+                TransactionItem.transaction_id
+                == Transaction.id,
+            )
+            .where(
+                *filters,
+                Transaction.direction == "debit",
+            )
+            .group_by(TransactionItem.category)
+            .order_by(category_sum.desc())
+            .limit(plan.limit)
+        )
+
+        rows = [
+            {
+                "category": category,
+                "amount": f"{amount:.2f}",
+            }
+            for category, amount in db.execute(statement)
+        ]
+
+        if not rows:
+            answer = (
+                "No reviewed receipt items found "
+                f"during {period_label}."
+            )
+        else:
+            summary = "; ".join(
+                f"{row['category']}: ${row['amount']}"
+                for row in rows
+            )
+
+            answer = (
+                "Your highest recorded item-category "
+                f"spending during {period_label}: "
+                f"{summary}."
+            )
+
+        return answer, {
+            "currency": "USD",
+            "categories": rows,
+        }
+
 
     raise ValueError("Unsupported query intent")

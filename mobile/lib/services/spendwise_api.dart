@@ -269,10 +269,15 @@ class SpendwiseApi {
     String draftId,
     Map<String, dynamic> corrected, {
     bool confirmSimilar = false,
+    bool confirmItemMismatch = false,
   }) async {
     await _request(
       '/api/v1/drafts/$draftId/approve',
-      body: {...corrected, 'confirm_similar': confirmSimilar},
+      body: {
+        ...corrected,
+        'confirm_similar': confirmSimilar,
+        'confirm_item_mismatch': confirmItemMismatch,
+      },
     );
   }
 
@@ -282,5 +287,25 @@ class SpendwiseApi {
 
   void dispose() {
     _client.close();
+  }
+
+  Future<void> saveDraftItems(
+    String draftId,
+    List<Map<String, dynamic>> items,
+  ) async {
+    final token = await _tokenProvider();
+
+    final response = await _client
+        .patch(
+          Uri.parse('$baseUrl/api/v1/drafts/$draftId/items'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'items': items}),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    checkResponse(response);
   }
 }

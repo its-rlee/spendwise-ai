@@ -81,6 +81,19 @@ class OllamaExtractor:
         - If an essential value is uncertain, mark
         needs_review = true.
 
+        RECEIPT LINE ITEM EXTRACTION:
+
+        - Extract every clearly identifiable purchased item.
+        - For each item, capture its description and
+        printed line amount.
+        - Do not include tax, subtotal, total, payment
+        information or change as purchased items.
+        - If an item price is unreadable, return null.
+        - Never invent an item or a missing price.
+        - Do not confuse tax percentages with tax amounts.
+        - Preserve the receipt's printed monetary values.
+        - Never assume every item is a grocery product.
+
         """
         
 

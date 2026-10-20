@@ -1,4 +1,4 @@
-
+from decimal import Decimal
 from fastapi import (
     APIRouter,
     Depends,
@@ -12,11 +12,14 @@ from .database import get_db
 from .models import (
     Transaction,
     TransactionDraft,
+    TransactionItem,
 )
 from .review_schemas import (
     DraftRead,
     TransactionApproval,
     DraftRejection,
+    ReceiptItemsUpdate,
+    ReceiptItemEdit,
 )
 from .review_service import make_transaction_drafts
 from .extraction import run_document_extraction
@@ -225,6 +228,51 @@ def approve_draft(
             },
         )
 
+
+    if draft.receipt_items and not draft.items_reviewed:
+        raise HTTPException(
+            status_code=409,
+            detail="Review receipt items before approval",
+        )
+
+    # Validate approved item data, not just the
+    # AI-generated draft structure.
+    items = [
+        ReceiptItemEdit.model_validate(item)
+        for item in (draft.receipt_items or [])
+    ]
+
+    if any(item.amount is None for item in items):
+        raise HTTPException(
+            status_code=422,
+            detail="Every approved item needs an amount",
+        )
+
+    # A subtotal check is helpful but is not always
+    # decisive: receipts can include discounts or fees.
+    if items and draft.receipt_subtotal is not None:
+        item_sum = sum(
+            (item.amount for item in items),
+            Decimal("0.00"),
+        )
+
+        if (
+            abs(item_sum - draft.receipt_subtotal)
+            > Decimal("0.01")
+            and not data.confirm_item_mismatch
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Receipt item subtotal mismatch",
+                    "item_sum": str(item_sum),
+                    "receipt_subtotal": str(
+                        draft.receipt_subtotal
+                    ),
+                },
+            )
+
+
     transaction = Transaction(
         merchant=data.merchant,
         amount=data.amount,
@@ -240,6 +288,18 @@ def approve_draft(
     try:
         db.add(transaction)
         db.flush()
+
+
+        for index, item in enumerate(items):
+            db.add(
+                TransactionItem(
+                    transaction_id=transaction.id,
+                    line_index=index,
+                    name=item.name,
+                    category=item.category,
+                    amount=item.amount,
+                )
+            )
 
         draft.status = "approved"
         draft.approved_transaction_id = transaction.id
@@ -362,3 +422,61 @@ def reject_draft(
         "draft_id": draft_id,
         "status": "rejected",
     }
+
+
+@router.patch(
+    "/api/v1/drafts/{draft_id}/items",
+    response_model=DraftRead,
+)
+def update_draft_items(
+    draft_id: str,
+    payload: ReceiptItemsUpdate,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
+    draft = get_owned_draft(
+        db,
+        draft_id,
+        user.id,
+    )
+
+    if draft.status != "pending":
+        raise HTTPException(
+            status_code=409,
+            detail="Draft is no longer editable",
+        )
+
+    document = get_owned_document(
+        db,
+        draft.document_id,
+        user.id,
+    )
+
+    if not document.s3_key.startswith("receipts/"):
+        raise HTTPException(
+            status_code=422,
+            detail="Item editing is for receipts only",
+        )
+
+    # Replace the whole JSON list so SQLAlchemy
+    # reliably detects the change.
+    draft.receipt_items = [
+        item.model_dump(mode="json")
+        for item in payload.items
+    ]
+
+    draft.items_reviewed = True
+
+    try:
+        db.commit()
+        db.refresh(draft)
+
+    except SQLAlchemyError as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=503,
+            detail="Could not save receipt items",
+        ) from exc
+
+    return draft
