@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/spendwise_api.dart';
 
+import 'document_review_screen.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -112,6 +114,21 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('SpendWise AI'),
         actions: [
+          IconButton(
+            tooltip: 'Upload financial document',
+            icon: const Icon(Icons.upload_file),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const DocumentReviewScreen(),
+                ),
+              );
+
+              if (mounted) {
+                await _loadTransactions();
+              }
+            },
+          ),
           IconButton(
             tooltip: 'Sign out',
             onPressed: () async {

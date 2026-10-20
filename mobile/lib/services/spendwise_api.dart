@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'dart:typed_data';
+
+import 'document_models.dart';
+
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -78,6 +82,32 @@ class SpendwiseApi {
              defaultValue: 'http://127.0.0.1:8000',
            );
 
+  void checkResponse(http.Response response) {
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return;
+    }
+
+    String message = 'Request failed';
+
+    try {
+      final body = jsonDecode(response.body);
+
+      if (body is Map) {
+        final detail = body['detail'];
+
+        if (detail is String) {
+          message = detail;
+        } else if (detail is Map && detail['message'] is String) {
+          message = detail['message'] as String;
+        }
+      }
+    } catch (_) {
+      // Avoid displaying raw server output.
+    }
+
+    throw ApiException(response.statusCode, message);
+  }
+
   static Future<String> _supabaseToken() async {
     final auth = Supabase.instance.client.auth;
     var session = auth.currentSession;
@@ -129,16 +159,7 @@ class SpendwiseApi {
       throw ApiException(0, 'Cannot connect to FastAPI.');
     }
 
-    if (response.statusCode == 401) {
-      throw ApiException(401, 'Authentication expired or invalid.');
-    }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(
-        response.statusCode,
-        'Request failed (${response.statusCode}).',
-      );
-    }
+    checkResponse(response);
 
     try {
       return jsonDecode(response.body);
@@ -166,6 +187,97 @@ class SpendwiseApi {
     );
 
     return AssistantReply.fromJson(Map<String, dynamic>.from(result as Map));
+  }
+
+  static const maxDocumentBytes = 5 * 1024 * 1024;
+
+  Future<UploadedDocument> uploadDocument({
+    required String filename,
+    required Uint8List bytes,
+  }) async {
+    if (bytes.isEmpty || bytes.length > maxDocumentBytes) {
+      throw ApiException(413, 'Choose a nonempty file under 5 MB.');
+    }
+
+    final extension = filename.split('.').last.toLowerCase();
+
+    final String path;
+
+    if (extension == 'pdf') {
+      path = '/api/v1/documents/upload';
+    } else if (['jpg', 'jpeg', 'png'].contains(extension)) {
+      path = '/api/v1/receipts/upload';
+    } else {
+      throw ApiException(415, 'Only PDF, JPG and PNG are supported.');
+    }
+
+    final token = await _tokenProvider();
+
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl$path'));
+
+    request.headers['Authorization'] = 'Bearer $token';
+
+    request.files.add(
+      http.MultipartFile.fromBytes('file', bytes, filename: filename),
+    );
+
+    try {
+      final streamedResponse = await _client
+          .send(request)
+          .timeout(const Duration(seconds: 90));
+
+      final response = await http.Response.fromStream(streamedResponse);
+
+      checkResponse(response);
+
+      return UploadedDocument.fromJson(
+        Map<String, dynamic>.from(jsonDecode(response.body) as Map),
+      );
+    } on TimeoutException {
+      throw ApiException(0, 'Upload timed out.');
+    } on http.ClientException {
+      throw ApiException(0, 'Could not connect to FastAPI.');
+    }
+  }
+
+  Future<List<TransactionDraftRecord>> prepareDocument(
+    String documentId,
+  ) async {
+    final result = await _request(
+      '/api/v1/documents/$documentId/prepare',
+      body: <String, dynamic>{},
+    );
+
+    return (result as List).map((item) {
+      return TransactionDraftRecord.fromJson(
+        Map<String, dynamic>.from(item as Map),
+      );
+    }).toList();
+  }
+
+  Future<List<TransactionDraftRecord>> getDrafts(String documentId) async {
+    final result = await _request('/api/v1/documents/$documentId/drafts');
+
+    return (result as List).map((item) {
+      return TransactionDraftRecord.fromJson(
+        Map<String, dynamic>.from(item as Map),
+      );
+    }).toList();
+  }
+
+  Future<void> approveDraft(
+    String draftId,
+    Map<String, dynamic> corrected, {
+    bool confirmSimilar = false,
+  }) async {
+    await _request(
+      '/api/v1/drafts/$draftId/approve',
+      body: {...corrected, 'confirm_similar': confirmSimilar},
+    );
+  }
+
+  Future<void> rejectDraft(String draftId, String reason) async {
+    await _request('/api/v1/drafts/$draftId/reject', body: {'reason': reason});
   }
 
   void dispose() {
