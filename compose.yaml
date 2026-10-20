@@ -1,0 +1,29 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    image: spendwise-api:day11
+
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    env_file:
+      - ./backend/.env
+
+    environment:
+      OLLAMA_URL: http://host.docker.internal:11434
+      TESSERACT_CMD: /usr/bin/tesseract
+
+      AWS_SHARED_CREDENTIALS_FILE: /home/appuser/.aws/credentials
+      AWS_CONFIG_FILE: /home/appuser/.aws/config
+
+    volumes:
+      - type: bind
+        source: ${USERPROFILE}/.aws
+        target: /home/appuser/.aws
+        read_only: true
+
+    init: true
+    restart: "no"
