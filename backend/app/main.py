@@ -1,4 +1,4 @@
-
+import os
 from decimal import Decimal
 from datetime import date
 from pydantic import field_validator
@@ -32,6 +32,8 @@ from .assistant import router as assistant_router
 
 from fastapi.middleware.cors import CORSMiddleware
 
+from .health import router as health_router
+
 app = FastAPI(
     title="SpendWise AI",
     description="AI-powered financial intelligence API",
@@ -48,24 +50,34 @@ app.include_router(review_router)
 
 app.include_router(assistant_router)
 
+app.include_router(health_router)
+
+local_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+app_env = os.getenv("APP_ENV", "development")
+
+if app_env == "production":
+    cors_origins = [
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ALLOWED_ORIGINS", ""
+        ).split(",")
+        if origin.strip()
+    ]
+else:
+    cors_origins = local_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=[
-        "GET",
-        "POST",
-        "PATCH",
-        "DELETE",
-        "OPTIONS",
+        "GET", "POST", "PATCH", "DELETE", "OPTIONS"
     ],
-    allow_headers=[
-        "Authorization",
-        "Content-Type",
-    ],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
