@@ -1,0 +1,14 @@
+# Backend secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+
+# Flutter local configuration
+mobile/config/dev.json
+mobile/.dart_tool/
+mobile/build/
