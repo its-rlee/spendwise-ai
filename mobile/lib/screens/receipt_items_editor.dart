@@ -6,8 +6,12 @@ class _ItemFields {
   final name = TextEditingController();
   final amount = TextEditingController();
   final category = TextEditingController(text: 'Uncategorized');
+  final int? sourceLineIndex;
+  final String? rawDescription;
 
-  _ItemFields([ReceiptItemDraft? item]) {
+  _ItemFields([ReceiptItemDraft? item])
+    : sourceLineIndex = item?.sourceLineIndex,
+      rawDescription = item?.rawDescription {
     if (item != null) {
       name.text = item.name;
       amount.text = item.amount ?? '';
@@ -66,6 +70,7 @@ class _ReceiptItemsEditorState extends State<ReceiptItemsEditor> {
           'name': row.name.text.trim(),
           'amount': row.amount.text.trim(),
           'category': row.category.text.trim(),
+          'source_line_index': row.sourceLineIndex,
         };
       }).toList(),
     );
@@ -97,6 +102,16 @@ class _ReceiptItemsEditorState extends State<ReceiptItemsEditor> {
                           padding: const EdgeInsets.all(12),
                           child: Column(
                             children: [
+                              if (row.rawDescription != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Text(
+                                    'Original receipt: ${row.rawDescription}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
                               TextFormField(
                                 controller: row.name,
                                 decoration: const InputDecoration(

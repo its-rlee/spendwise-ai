@@ -73,7 +73,9 @@ def receipt_client(monkeypatch):
             total=Decimal("9.19"),
             items=[
                 ReceiptItem(
-                    name="Milk",
+                    name="KS ORG MLK",
+                    raw_description="KS ORG MLK",
+                    store_item_code="1234567",
                     price=Decimal("4.99"),
                 ),
                 ReceiptItem(
@@ -125,11 +127,13 @@ def item_payload():
                 "name": "Milk",
                 "amount": "4.99",
                 "category": "Dairy",
+                "source_line_index": 0,
             },
             {
                 "name": "Bread",
                 "amount": "3.50",
                 "category": "Bakery",
+                "source_line_index": 1,
             },
         ]
     }
@@ -188,6 +192,11 @@ def test_items_saved_only_after_approval(receipt_client):
             select(TransactionItem)
             .order_by(TransactionItem.line_index)
         ).all()
+
+        assert items[0].raw_description == "KS ORG MLK"
+        assert items[0].name == "Milk"
+        assert items[0].store_item_code == "1234567"
+        assert items[0].source_line_index == 0
 
         assert len(transactions) == 1
         assert len(items) == 2
@@ -276,3 +285,51 @@ def test_item_subtotal_mismatch_requires_confirmation(
         json=confirmed,
     )
     assert accepted.status_code == 201
+
+def test_original_receipt_text_cannot_be_overwritten(
+    receipt_client,
+):
+    client, _, document_id, _, _, _ = receipt_client
+
+    draft_id = prepare(client, document_id)
+
+    payload = item_payload()
+
+    # A client attempts to overwrite source evidence.
+    payload["items"][0]["raw_description"] = (
+        "FAKE PRODUCT"
+    )
+    payload["items"][0]["store_item_code"] = (
+        "FAKE-CODE"
+    )
+
+    response = client.patch(
+        f"/api/v1/drafts/{draft_id}/items",
+        json=payload,
+    )
+
+    assert response.status_code == 200, response.text
+
+    saved_item = response.json()["receipt_items"][0]
+
+    assert saved_item["raw_description"] == "KS ORG MLK"
+    assert saved_item["store_item_code"] == "1234567"
+    assert saved_item["name"] == "Milk"
+
+
+def test_unknown_source_index_is_rejected(
+    receipt_client,
+):
+    client, _, document_id, _, _, _ = receipt_client
+
+    draft_id = prepare(client, document_id)
+
+    payload = item_payload()
+    payload["items"][0]["source_line_index"] = 999
+
+    response = client.patch(
+        f"/api/v1/drafts/{draft_id}/items",
+        json=payload,
+    )
+
+    assert response.status_code == 422

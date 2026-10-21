@@ -7,10 +7,29 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class ReceiptItem(BaseModel):
-    name: str
+    name: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+
     price: Decimal | None = Field(
         default=None,
         ge=0,
+    )
+
+    raw_description: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+
+    store_item_code: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+
+    category: str | None = Field(
+        default=None,
+        max_length=100,
     )
 
 

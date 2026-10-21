@@ -1,0 +1,16 @@
+merchant,raw_description,store_item_code,normalized_name,category
+Costco,KS ORG MLK,,Organic milk,Dairy
+Costco,KS 2P MLK,,Two percent milk,Dairy
+Walmart,WHL MLK,,Whole milk,Dairy
+Costco,CHKN BRST,,Chicken breast,Meat
+Costco,BNLS CHKN,,Boneless chicken,Meat
+Walmart,GRND BEEF,,Ground beef,Meat
+Costco,ORG BAN,,Organic bananas,Produce
+Target,BAN BUNCH,,Bananas,Produce
+Walmart,AVOC 4CT,,Four avocados,Produce
+Costco,TIDE PODS,,Laundry detergent,Household
+Target,LNDRY DTRG,,Laundry detergent,Household
+Walmart,DISH SOAP,,Dish soap,Household
+Costco,SHMP 2PK,,Shampoo two pack,Personal Care
+Target,COND 12OZ,,Hair conditioner,Personal Care
+Walmart,TOOTH PST,,Toothpaste,Personal Care

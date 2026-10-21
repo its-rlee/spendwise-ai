@@ -107,6 +107,17 @@ def prepare(client, document_id):
     )
 
 
+def review_empty_receipt_items(client, draft_id):
+    response = client.patch(
+        f"/api/v1/drafts/{draft_id}/items",
+        json={"items": []},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["items_reviewed"] is True
+
+
+
 def test_prepare_does_not_approve(review_client):
     client, engine, document_id = review_client
 
@@ -129,6 +140,7 @@ def test_approve_and_prevent_repeat(review_client):
 
     prepared = prepare(client, document_id)
     draft_id = prepared.json()[0]["id"]
+    review_empty_receipt_items(client, draft_id)
 
     url = f"/api/v1/drafts/{draft_id}/approve"
 
@@ -192,6 +204,7 @@ def test_possible_duplicate_warning(review_client):
 
     prepared = prepare(client, document_id)
     draft_id = prepared.json()[0]["id"]
+    review_empty_receipt_items(client, draft_id)    
 
     # Simulate an existing purchase with
     # the same merchant, amount and date.
