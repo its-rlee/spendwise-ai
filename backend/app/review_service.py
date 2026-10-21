@@ -49,15 +49,18 @@ def make_transaction_drafts(
                 status="pending",
                 receipt_items=[
                     {
+                        "source_line_index": index,
+                        "raw_description": item.raw_description,
+                        "store_item_code": item.store_item_code,
                         "name": item.name,
                         "amount": (
                             str(item.price)
                             if item.price is not None
                             else None
                         ),
-                        "category": "Uncategorized",
+                        "category": item.category or "Uncategorized",
                     }
-                    for item in result.items
+                    for index, item in enumerate(result.items)
                 ],
                 receipt_subtotal=result.subtotal,
                 items_reviewed=False,

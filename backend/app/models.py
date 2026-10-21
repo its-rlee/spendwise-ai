@@ -263,3 +263,19 @@ class TransactionItem(Base):
         Numeric(12, 2),
         nullable=False,
     )
+
+    raw_description: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    store_item_code: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    source_line_index: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+

@@ -11,7 +11,7 @@ class UploadedDocument {
 
   factory UploadedDocument.fromJson(Map<String, dynamic> json) {
     return UploadedDocument(
-      id: json['document_id'] as String,
+      id: (json['document_id'] ?? json['id']) as String,
       filename: json['filename'] as String,
       status: json['status'] as String,
     );
@@ -81,11 +81,17 @@ class ReceiptItemDraft {
   final String name;
   final String? amount;
   final String category;
+  final int? sourceLineIndex;
+  final String? rawDescription;
+  final String? storeItemCode;
 
   ReceiptItemDraft({
     required this.name,
     required this.amount,
     required this.category,
+    required this.sourceLineIndex,
+    required this.rawDescription,
+    required this.storeItemCode,
   });
 
   factory ReceiptItemDraft.fromJson(Map<String, dynamic> json) {
@@ -93,6 +99,9 @@ class ReceiptItemDraft {
       name: json['name']?.toString() ?? '',
       amount: json['amount']?.toString(),
       category: json['category']?.toString() ?? 'Uncategorized',
+      sourceLineIndex: json['source_line_index'] as int?,
+      rawDescription: json['raw_description'] as String?,
+      storeItemCode: json['store_item_code'] as String?,
     );
   }
 }

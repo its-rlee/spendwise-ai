@@ -228,8 +228,16 @@ def approve_draft(
             },
         )
 
+    document = get_owned_document(
+        db,
+        draft.document_id,
+        user.id,
+    )
 
-    if draft.receipt_items and not draft.items_reviewed:
+    if (
+        document.s3_key.startswith("receipts/")
+        and not draft.items_reviewed
+    ):
         raise HTTPException(
             status_code=409,
             detail="Review receipt items before approval",
@@ -298,6 +306,9 @@ def approve_draft(
                     name=item.name,
                     category=item.category,
                     amount=item.amount,
+                    raw_description=item.raw_description,
+                    store_item_code=item.store_item_code,
+                    source_line_index=item.source_line_index,
                 )
             )
 
@@ -460,11 +471,54 @@ def update_draft_items(
 
     # Replace the whole JSON list so SQLAlchemy
     # reliably detects the change.
-    draft.receipt_items = [
-        item.model_dump(mode="json")
-        for item in payload.items
-    ]
 
+    # Find original extracted items by stable source ID.
+    original_items = {
+        row["source_line_index"]: row
+        for row in (draft.receipt_items or [])
+        if row.get("source_line_index") is not None
+    }
+
+    seen = set()
+    reviewed_items = []
+
+    for item in payload.items:
+        source_index = item.source_line_index
+
+        if source_index is not None:
+            if (
+                source_index not in original_items
+                or source_index in seen
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Invalid or duplicate source item",
+                )
+
+            seen.add(source_index)
+            original = original_items[source_index]
+        else:
+            # This is a manually added item.
+            original = {}
+
+        reviewed_items.append({
+            "source_line_index": source_index,
+            "raw_description": original.get(
+                "raw_description"
+            ),
+            "store_item_code": original.get(
+                "store_item_code"
+            ),
+            "name": item.name,
+            "amount": (
+                str(item.amount)
+                if item.amount is not None
+                else None
+            ),
+            "category": item.category,
+        })
+
+    draft.receipt_items = reviewed_items
     draft.items_reviewed = True
 
     try:

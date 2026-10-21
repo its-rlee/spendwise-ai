@@ -94,6 +94,34 @@ class OllamaExtractor:
         - Preserve the receipt's printed monetary values.
         - Never assume every item is a grocery product.
 
+            
+        PRODUCT IDENTIFICATION RULES:
+
+        - Preserve the original receipt description
+        in raw_description without expanding it.
+        - In name, provide a readable expanded product
+        name when the abbreviation and context
+        support that interpretation.
+        - Do not invent brands, quantities, package
+        sizes, or product variants.
+        - If expansion is uncertain, retain the
+        abbreviated name and flag for human review.
+        - Extract store_item_code only when visible.
+        - Do not invent product codes.
+        - Never treat an AI-suggested name as verified.
+
+        PRODUCT CATEGORIZATION:
+
+        - Predict a category for every identifiable product.
+        - Use the product description and merchant context.
+        - Categories include Dairy, Meat, Produce, Bakery,
+        Household, Personal Care, Electronics, Clothing,
+        and Other.
+        - Do not assume all items are groceries.
+        - If the category cannot be determined reliably,
+        return null.
+        - Never invent product information.
+
         """
         
 

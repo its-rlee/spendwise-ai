@@ -234,6 +234,31 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
     });
   }
 
+  Future<void> _suggestAndReview(TransactionDraftRecord draft) async {
+    await _run(() async {
+      final suggestions = await _api.suggestDraftCategories(draft.id);
+      if (!mounted) return;
+      final overrides = <int, String>{};
+      for (final suggestion in suggestions) {
+        final index = suggestion['line_index'];
+        final category = suggestion['category'];
+        if (index is int && category is String && category.isNotEmpty) {
+          overrides[index] = category;
+        }
+      }
+      final edited = await showDialog<List<Map<String, dynamic>>>(
+        context: context,
+        builder: (_) => ReceiptItemsEditor(
+          initialItems: draft.receiptItems,
+          suggestedCategories: overrides,
+        ),
+      );
+      if (edited == null || !mounted) return;
+      await _api.saveDraftItems(draft.id, edited);
+      await _fetchDrafts();
+    });
+  }
+
   bool get _isReceipt {
     final name = (_filename ?? '').toLowerCase();
 
@@ -403,6 +428,13 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
                                   ? 'Edit reviewed items'
                                   : 'Review purchased items',
                             ),
+                          ),
+
+                        if (draft.status == 'pending' && _isReceipt)
+                          TextButton.icon(
+                            onPressed: _busy ? null : () => _suggestAndReview(draft),
+                            icon: const Icon(Icons.auto_fix_high),
+                            label: const Text('Suggest categories (ML/Ollama)'),
                           ),
 
                         if (draft.status == 'pending')

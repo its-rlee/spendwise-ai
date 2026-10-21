@@ -129,6 +129,22 @@ class ReceiptItemEdit(BaseModel):
         return value
 
 
+    source_line_index: int | None = Field(
+        default=None,
+        ge=0,
+    )
+
+    raw_description: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+
+    store_item_code: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+
+
 class ReceiptItemsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

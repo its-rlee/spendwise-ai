@@ -285,6 +285,15 @@ class SpendwiseApi {
     await _request('/api/v1/drafts/$draftId/reject', body: {'reason': reason});
   }
 
+  Future<List<Map<String, dynamic>>> suggestDraftCategories(String draftId) async {
+    final result = await _request(
+      '/api/v1/drafts/$draftId/category-suggestions',
+      body: <String, dynamic>{},
+    );
+    final rows = (result as Map<String, dynamic>)['suggestions'] as List;
+    return rows.map((row) => Map<String, dynamic>.from(row as Map)).toList();
+  }
+
   void dispose() {
     _client.close();
   }
