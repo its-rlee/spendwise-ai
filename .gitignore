@@ -20,3 +20,6 @@ ml/reports/
 # Never commit private training exports
 ml/data/private/
 ml/data/reviewed_*.csv
+
+# Locally trained model (not a source artifact)
+backend/ml_models/

@@ -9,13 +9,13 @@ class _ItemFields {
   final int? sourceLineIndex;
   final String? rawDescription;
 
-  _ItemFields([ReceiptItemDraft? item])
+  _ItemFields([ReceiptItemDraft? item, String? suggestedCategory])
     : sourceLineIndex = item?.sourceLineIndex,
       rawDescription = item?.rawDescription {
     if (item != null) {
       name.text = item.name;
       amount.text = item.amount ?? '';
-      category.text = item.category;
+      category.text = suggestedCategory ?? item.category;
     }
   }
 
@@ -28,8 +28,13 @@ class _ItemFields {
 
 class ReceiptItemsEditor extends StatefulWidget {
   final List<ReceiptItemDraft> initialItems;
+  final Map<int, String> suggestedCategories;
 
-  const ReceiptItemsEditor({super.key, required this.initialItems});
+  const ReceiptItemsEditor({
+    super.key,
+    required this.initialItems,
+    this.suggestedCategories = const {},
+  });
 
   @override
   State<ReceiptItemsEditor> createState() => _ReceiptItemsEditorState();
@@ -45,8 +50,8 @@ class _ReceiptItemsEditorState extends State<ReceiptItemsEditor> {
   void initState() {
     super.initState();
 
-    for (final item in widget.initialItems) {
-      _rows.add(_ItemFields(item));
+    for (var index = 0; index < widget.initialItems.length; index++) {
+      _rows.add(_ItemFields(widget.initialItems[index], widget.suggestedCategories[index]));
     }
   }
 
@@ -87,7 +92,7 @@ class _ReceiptItemsEditorState extends State<ReceiptItemsEditor> {
           children: [
             const Text(
               'Compare each item with the receipt. '
-              'Correct mistakes before approval.',
+              'Correct mistakes before approval. AI category suggestions are unverified.',
             ),
             const SizedBox(height: 12),
             Expanded(

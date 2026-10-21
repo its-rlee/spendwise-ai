@@ -15,11 +15,18 @@ services:
     environment:
       OLLAMA_URL: http://host.docker.internal:11434
       TESSERACT_CMD: /usr/bin/tesseract
+      ML_MODEL_PATH: /app/ml_models/receipt_category_model.joblib
+      ML_OLLAMA_FALLBACK: ${ML_OLLAMA_FALLBACK:-false}
+      ML_CATEGORY_THRESHOLD: ${ML_CATEGORY_THRESHOLD:-0.55}
 
       AWS_SHARED_CREDENTIALS_FILE: /home/appuser/.aws/credentials
       AWS_CONFIG_FILE: /home/appuser/.aws/config
 
     volumes:
+      - type: bind
+        source: ./backend/ml_models
+        target: /app/ml_models
+        read_only: true
       - type: bind
         source: ${USERPROFILE}/.aws
         target: /home/appuser/.aws
