@@ -12,3 +12,11 @@
 mobile/config/dev.json
 mobile/.dart_tool/
 mobile/build/
+
+# Generated ML artifacts and local reports
+ml/artifacts/
+ml/reports/
+
+# Never commit private training exports
+ml/data/private/
+ml/data/reviewed_*.csv
