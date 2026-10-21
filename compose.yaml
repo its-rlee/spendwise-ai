@@ -4,7 +4,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
 
-    image: spendwise-api:day11
+    image: spendwise-api:local
 
     ports:
       - "127.0.0.1:8000:8000"

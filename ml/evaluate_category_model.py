@@ -45,7 +45,7 @@ def main():
 
     # This is a strict first-pass leakage check, not full semantic de-duplication.
     train = pd.read_csv(ROOT / 'data/synthetic_labels.csv', dtype=str).fillna('')
-    benchmark = pd.read_csv(ROOT / 'data/benchmark_day03.csv', dtype=str).fillna('')
+    benchmark = pd.read_csv(ROOT / 'data/category_benchmark_synthetic.csv', dtype=str).fillna('')
     for df in (train, benchmark):
         for col in ('merchant', 'raw_description', 'normalized_name'):
             df[col] = df[col].str.strip()
@@ -93,10 +93,10 @@ def main():
     }
     out = ROOT / 'reports'
     out.mkdir(exist_ok=True)
-    real.to_csv(out / 'day04_real_predictions.csv', index=False)
-    (out / 'day04_real_metrics.json').write_text(json.dumps(metrics, indent=2), encoding='utf-8')
+    real.to_csv(out / 'category_evaluation_predictions.csv', index=False)
+    (out / 'category_evaluation_metrics.json').write_text(json.dumps(metrics, indent=2), encoding='utf-8')
     print(json.dumps(metrics, indent=2))
-    print('\nReview wrong or high-risk predictions in: ml/reports/day04_real_predictions.csv')
+    print('\nReview wrong or high-risk predictions in: ml/reports/category_evaluation_predictions.csv')
     print(real[['raw_description', 'category', 'prediction', 'score', 'route']].to_string(index=False))
 
 

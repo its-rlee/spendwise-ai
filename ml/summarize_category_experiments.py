@@ -8,10 +8,10 @@ REPORTS = ROOT / 'reports'
 
 
 def load(tag):
-    metrics_path = REPORTS / f'day03_metrics_{tag}.json'
-    detail_path = REPORTS / f'day03_comparison_{tag}.csv'
+    metrics_path = REPORTS / f'category_metrics_{tag}.json'
+    detail_path = REPORTS / f'category_comparison_{tag}.csv'
     if not metrics_path.is_file() or not detail_path.is_file():
-        raise SystemExit(f'Missing {tag} report(s): run ml/compare_day03.py --tag {tag}')
+        raise SystemExit(f'Missing {tag} report(s): run ml/compare_category_models.py --tag {tag}')
     metrics = json.loads(metrics_path.read_text(encoding='utf-8'))
     with detail_path.open(encoding='utf-8-sig', newline='') as file:
         rows = list(csv.DictReader(file))

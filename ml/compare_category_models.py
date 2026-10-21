@@ -13,7 +13,7 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score
 
 ROOT = Path(__file__).resolve().parent
-BENCH = ROOT / "data" / "benchmark_day03.csv"
+BENCH = ROOT / "data" / "category_benchmark_synthetic.csv"
 TRAIN = ROOT / "data" / "synthetic_labels.csv"
 MODEL = ROOT / "artifacts" / "receipt_category_model.joblib"
 REPORTS = ROOT / "reports"
@@ -153,8 +153,8 @@ metrics = {
 }
 REPORTS.mkdir(exist_ok=True)
 suffix = f"_{args.tag}" + ("_smoke" if args.limit is not None else "")
-(results).to_csv(REPORTS / f"day03_comparison{suffix}.csv", index=False)
-(REPORTS / f"day03_metrics{suffix}.json").write_text(
+(results).to_csv(REPORTS / f"category_comparison{suffix}.csv", index=False)
+(REPORTS / f"category_metrics{suffix}.json").write_text(
     json.dumps(metrics, indent=2), encoding="utf-8"
 )
 print("\n" + json.dumps(metrics, indent=2))

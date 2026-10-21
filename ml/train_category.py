@@ -170,7 +170,7 @@ joblib.dump(
     ARTIFACTS / "receipt_category_model.joblib",
 )
 
-(REPORTS / "day02_metrics.json").write_text(
+(REPORTS / "category_training_metrics.json").write_text(
     json.dumps(metrics, indent=2),
     encoding="utf-8",
 )
@@ -185,7 +185,7 @@ holdout["correct"] = (
 )
 
 holdout.to_csv(
-    REPORTS / "day02_holdout.csv",
+    REPORTS / "category_training_holdout.csv",
     index=False,
 )
 
