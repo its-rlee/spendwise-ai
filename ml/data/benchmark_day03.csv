@@ -1,0 +1,16 @@
+merchant,raw_description,store_item_code,normalized_name,category
+Costco,GRK YGRT,,Greek yogurt,Dairy
+Target,CHED CHSE,,Cheddar cheese,Dairy
+Walmart,SLTD BTR,,Salted butter,Dairy
+Costco,PRK CHPS,,Pork chops,Meat
+Target,TKY SAUSG,,Turkey sausage,Meat
+Walmart,BF STK,,Beef steak,Meat
+Costco,SPNCH BAG,,Bagged spinach,Produce
+Walmart,STRWB PK,,Strawberries,Produce
+Target,CUCUMBR 2CT,,Cucumbers,Produce
+Costco,PPR TWL 12PK,,Paper towels,Household
+Target,TRSH BGS,,Trash bags,Household
+Walmart,DRYR SHT,,Dryer sheets,Household
+Costco,DEOD 2PK,,Deodorant,Personal Care
+Target,FACE CLNSR,,Facial cleanser,Personal Care
+Walmart,HAND LOTN,,Hand lotion,Personal Care
