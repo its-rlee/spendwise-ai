@@ -1,5 +1,21 @@
 # SpendWise AI
 
+## Free Android receipt app
+
+The default mobile app now scans and stores receipts **on-device**, without an account, cloud inference, or a paid backend. It combines Google's document scanner and bundled ML Kit OCR with spatial receipt parsing, editable review, local drafts, receipt search, monthly summaries and JSON export. The visual design uses ivory, charcoal and lime with a Scan → Check → Save flow.
+
+See [Android setup, privacy, testing and release notes](docs/android-offline.md). The **Android offline app** GitHub Actions workflow builds an installable preview APK. A stable production signing key and real-device validation are required before a public production release. No cloud LLM is required or enabled; the older server-based project remains below for development.
+
+```sh
+cd mobile
+flutter pub get
+flutter run -d <android-device>
+```
+
+Scanner components may need downloading on first use. Photo import uses bundled OCR. This is an initial implementation, not a claim of benchmarked OCR accuracy.
+
+---
+
 **AI-Powered Financial Document Intelligence Platform**
 
 SpendWise AI is a full-stack application that transforms receipts and bank statements into structured, reviewable financial records.
