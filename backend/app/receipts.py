@@ -97,19 +97,26 @@ def upload_receipt(
     finally:
         file.file.close()
 
-    # Local OCR: no Textract API request
-    try:
-        extracted_text = ocr_reader(image_bytes)
+    gemini_mode = (
+        os.getenv("RECEIPT_AI_PROVIDER", "ollama").lower()
+        == "gemini"
+    )
 
-    except (
-        pytesseract.TesseractNotFoundError,
-        pytesseract.TesseractError,
-        RuntimeError,
-    ) as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Local OCR processing failed",
-        ) from exc
+    if gemini_mode:
+        # Gemini reads the image later during /prepare.
+        extracted_text = ""
+    else:
+        try:
+            extracted_text = ocr_reader(image_bytes)
+        except (
+            pytesseract.TesseractNotFoundError,
+            pytesseract.TesseractError,
+            RuntimeError,
+        ) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Local OCR processing failed",
+            ) from exc
 
     document_id = str(uuid4())
     object_key = f"receipts/{user.id}/{document_id}.jpg"
@@ -139,9 +146,9 @@ def upload_receipt(
         sha256=sha256(image_bytes).hexdigest(),
         page_count=1,
         status=(
-            "text_ready"
-            if extracted_text
-            else "needs_review"
+            "uploaded"
+            if gemini_mode
+            else ("text_ready" if extracted_text else "needs_review")
         ),
     )
 
