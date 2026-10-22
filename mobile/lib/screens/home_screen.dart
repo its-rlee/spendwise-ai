@@ -2,10 +2,13 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 import '../services/spendwise_api.dart';
 
 import 'document_review_screen.dart';
+
+import 'scan_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,7 +36,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+
     _loadTransactions();
+
+    // After login, launch the receipt scanner on Android.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openScanner();
+      });
+    }
   }
 
   @override
@@ -106,6 +117,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _openScanner() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ScanScreen()));
+
+    if (mounted) {
+      await _loadTransactions();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final email = Supabase.instance.client.auth.currentUser?.email;
@@ -128,6 +149,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 await _loadTransactions();
               }
             },
+          ),
+          IconButton(
+            tooltip: 'Scan receipt',
+            icon: const Icon(Icons.document_scanner_outlined),
+            onPressed: _openScanner,
           ),
           IconButton(
             tooltip: 'Sign out',

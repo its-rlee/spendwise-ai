@@ -9,7 +9,14 @@ import 'draft_review_dialog.dart';
 import 'receipt_items_editor.dart';
 
 class DocumentReviewScreen extends StatefulWidget {
-  const DocumentReviewScreen({super.key});
+  const DocumentReviewScreen({
+    super.key,
+    this.initialReceiptBytes,
+    this.initialReceiptFilename,
+  });
+
+  final Uint8List? initialReceiptBytes;
+  final String? initialReceiptFilename;
 
   @override
   State<DocumentReviewScreen> createState() => _DocumentReviewScreenState();
@@ -27,6 +34,27 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
   bool _busy = false;
   String? _message;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final image = widget.initialReceiptBytes;
+    if (image == null) return;
+
+    _filename = widget.initialReceiptFilename ?? 'receipt.jpg';
+    _selectedBytes = image;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _run(() async {
+        // Both calls use the current authenticated FastAPI client.
+        await _upload();
+        await _prepare();
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -156,7 +184,7 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
 
     bool confirmSimilar = false;
     bool confirmItemMismatch = false;
-
+    bool approved = false;
     await _run(() async {
       while (true) {
         try {
@@ -219,8 +247,52 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
           }
         }
       }
+      approved = true;
       await _fetchDrafts();
     });
+    if (approved && mounted && widget.initialReceiptBytes != null) {
+      final nextAction = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 56,
+                  color: Color(0xFF237B65),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Receipt saved!',
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.pop(sheetContext, 'scan'),
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('Scan another'),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(sheetContext, 'dashboard'),
+                  child: const Text('Go to dashboard'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      if (mounted && nextAction != null) {
+        Navigator.pop(context, nextAction);
+      }
+    }
   }
 
   Future<void> _reject(TransactionDraftRecord draft) async {
@@ -285,13 +357,35 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Document Review')),
+      appBar: AppBar(
+        title: Text(
+          widget.initialReceiptBytes != null
+              ? 'Review your receipt'
+              : 'Document Review',
+        ),
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
+              if (widget.initialReceiptBytes != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.memory(
+                    widget.initialReceiptBytes!,
+                    height: 220,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Check the merchant, total and purchased items '
+                  'against your photo before approving.',
+                ),
+                const SizedBox(height: 20),
+              ],
               Text(
                 'Upload a fictional receipt or statement',
                 style: Theme.of(context).textTheme.titleLarge,
@@ -302,27 +396,27 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
                 'Maximum file size: 5 MB.',
               ),
               const SizedBox(height: 12),
-
-              OutlinedButton.icon(
-                onPressed: _busy ? null : () => _run(_pickFile),
-                icon: const Icon(Icons.attach_file),
-                label: const Text('Choose File'),
-              ),
-
-              if (_filename != null)
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text('Selected: $_filename'),
+              if (widget.initialReceiptBytes == null) ...[
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _run(_pickFile),
+                  icon: const Icon(Icons.attach_file),
+                  label: const Text('Choose File'),
                 ),
 
-              FilledButton.icon(
-                onPressed: _busy || _selectedBytes == null
-                    ? null
-                    : () => _run(_upload),
-                icon: const Icon(Icons.cloud_upload),
-                label: const Text('Upload Document'),
-              ),
+                if (_filename != null)
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text('Selected: $_filename'),
+                  ),
 
+                FilledButton.icon(
+                  onPressed: _busy || _selectedBytes == null
+                      ? null
+                      : () => _run(_upload),
+                  icon: const Icon(Icons.cloud_upload),
+                  label: const Text('Upload Document'),
+                ),
+              ],
               if (_documentId != null) ...[
                 const SizedBox(height: 16),
                 SelectableText('Document ID: $_documentId'),
@@ -432,7 +526,9 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
 
                         if (draft.status == 'pending' && _isReceipt)
                           TextButton.icon(
-                            onPressed: _busy ? null : () => _suggestAndReview(draft),
+                            onPressed: _busy
+                                ? null
+                                : () => _suggestAndReview(draft),
                             icon: const Icon(Icons.auto_fix_high),
                             label: const Text('Suggest categories (ML/Ollama)'),
                           ),
