@@ -47,6 +47,8 @@ def setup_client(monkeypatch):
         "spendwise-test-bucket",
     )
 
+    monkeypatch.setenv("RECEIPT_AI_PROVIDER", "ollama")
+
     sqlite_engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
