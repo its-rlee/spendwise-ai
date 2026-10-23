@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/document_models.dart';
+import '../theme/terminal_theme.dart';
 
 class _ItemFields {
   final name = TextEditingController();
@@ -84,10 +85,10 @@ class _ReceiptItemsEditorState extends State<ReceiptItemsEditor> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Review purchased items'),
+      title: const TerminalSectionTitle('Review purchased items', index: '03'),
       content: SizedBox(
         width: 500,
-        height: 420,
+        height: (MediaQuery.sizeOf(context).height * 0.55).clamp(230.0, 490.0),
         child: Column(
           children: [
             const Text(
