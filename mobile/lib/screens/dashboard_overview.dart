@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/dashboard_models.dart';
 import '../services/spendwise_api.dart';
+import '../theme/terminal_theme.dart';
 
 /// Dashboard summaries are deterministic database reads, not AI estimates.
 /// Parent owns scanning/navigation; this widget owns only its filters and data.
@@ -22,10 +23,10 @@ class DashboardOverview extends StatefulWidget {
 }
 
 class _DashboardOverviewState extends State<DashboardOverview> {
-  static const _ink = Color(0xFF102B29);
-  static const _lime = Color(0xFFD5F67B);
-  static const _muted = Color(0xFF667974);
-  static const _soft = Color(0xFFF1F6F2);
+  static const _ink = TerminalColors.phosphor;
+  static const _lime = TerminalColors.amber;
+  static const _muted = TerminalColors.muted;
+  static const _soft = TerminalColors.raised;
 
   final _api = SpendwiseApi();
   SpendingDashboard? _data;
@@ -116,30 +117,21 @@ class _DashboardOverviewState extends State<DashboardOverview> {
   }
 
   Widget _panel(Widget child, {EdgeInsets padding = const EdgeInsets.all(18)}) {
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE4EBE6)),
-      ),
-      child: child,
-    );
+    return TerminalPanel(padding: padding, child: child);
   }
 
   Widget _section(String title, Widget child, {String? subtitle}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 23),
+      padding: const EdgeInsets.only(bottom: 25),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(
-            fontSize: 21, fontWeight: FontWeight.w800, color: _ink,
-          )),
+          TerminalSectionTitle(title),
           if (subtitle != null) ...[
-            const SizedBox(height: 3),
-            Text(subtitle, style: const TextStyle(color: _muted, fontSize: 12)),
+            const SizedBox(height: 7),
+            Text(subtitle, style: const TextStyle(
+              color: _muted, fontSize: 12,
+            )),
           ],
           const SizedBox(height: 12),
           child,
@@ -155,12 +147,12 @@ class _DashboardOverviewState extends State<DashboardOverview> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: TextStyle(
-            color: primary ? _lime : const Color(0xFFC7DCD4),
+            color: primary ? _lime : _muted,
             fontSize: 12,
           )),
           const SizedBox(height: 7),
           Text(value, style: TextStyle(
-            color: Colors.white, fontSize: primary ? 28 : 18,
+            color: TerminalColors.bright, fontSize: primary ? 28 : 18,
             fontWeight: FontWeight.w800, letterSpacing: -0.8,
           )),
         ],
@@ -177,8 +169,15 @@ class _DashboardOverviewState extends State<DashboardOverview> {
       margin: const EdgeInsets.only(bottom: 22),
       width: double.infinity,
       decoration: BoxDecoration(
-        color: _ink,
-        borderRadius: BorderRadius.circular(26),
+        color: TerminalColors.raised,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: TerminalColors.soft),
+        boxShadow: [
+          BoxShadow(
+            color: TerminalColors.phosphor.withValues(alpha: 0.08),
+            blurRadius: 26,
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,8 +226,8 @@ class _DashboardOverviewState extends State<DashboardOverview> {
     return _panel(Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Monthly approved expenses',
-            style: TextStyle(color: _muted, fontSize: 12)),
+        const Text('MONTHLY APPROVED EXPENSES',
+            style: TextStyle(color: _muted, fontSize: 12, letterSpacing: 1)),
         const SizedBox(height: 18),
         SizedBox(
           height: 165,
@@ -246,13 +245,20 @@ class _DashboardOverviewState extends State<DashboardOverview> {
                     Text(amount == 0 ? '—' : amount.toStringAsFixed(0),
                         style: const TextStyle(color: _muted, fontSize: 10)),
                     const SizedBox(height: 6),
-                    Container(
-                      height: math.max(4, ratio * 113),
-                      width: 27,
-                      decoration: BoxDecoration(
-                        color: active ? _ink : const Color(0xFFB6D8CA),
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(7),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 4, end: math.max(4, ratio * 113)),
+                      duration: MediaQuery.of(context).disableAnimations
+                          ? Duration.zero
+                          : const Duration(milliseconds: 750),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, height, _) => Container(
+                        height: height,
+                        width: 27,
+                        decoration: BoxDecoration(
+                          color: active ? _ink : TerminalColors.border,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(4),
+                          ),
                         ),
                       ),
                     ),
@@ -306,7 +312,7 @@ class _DashboardOverviewState extends State<DashboardOverview> {
               child: LinearProgressIndicator(
                 value: (value / maxValue).clamp(0.0, 1.0),
                 minHeight: 8,
-                color: const Color(0xFF78AB90),
+                color: TerminalColors.phosphor,
                 backgroundColor: _soft,
               ),
             ),
@@ -360,7 +366,7 @@ class _DashboardOverviewState extends State<DashboardOverview> {
         children: [
           const Icon(Icons.receipt_long_rounded, size: 38, color: _ink),
           const SizedBox(height: 10),
-          const Text('Your purchase history starts here.'),
+          const Text('NO APPROVED TRANSACTIONS RECORDED.'),
           const SizedBox(height: 10),
           FilledButton.icon(
             onPressed: widget.onScan,
@@ -434,10 +440,10 @@ class _DashboardOverviewState extends State<DashboardOverview> {
           const Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Your money. Clearer.',
+              Text('YOUR MONEY. DECODED.',
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
                       letterSpacing: -1, color: _ink)),
-              Text('Approved spending, without the guesswork.',
+              Text('ACCOUNT TELEMETRY  /  VERIFIED TRANSACTIONS',
                   style: TextStyle(fontSize: 12, color: _muted)),
             ],
           )),
@@ -473,8 +479,8 @@ class _DashboardOverviewState extends State<DashboardOverview> {
             icon: const Icon(Icons.add_a_photo_outlined),
             label: const Text('Scan receipt'),
             style: FilledButton.styleFrom(
-              backgroundColor: _ink,
-              foregroundColor: _lime,
+              backgroundColor: TerminalColors.phosphor,
+              foregroundColor: TerminalColors.background,
             ),
           ),
         ]),
@@ -502,10 +508,32 @@ class _DashboardOverviewState extends State<DashboardOverview> {
           _hero(d),
           _section('Spending over time', _chart(d),
               subtitle: 'Six-month trend ending in the selected month'),
-          _section('By product category', _categoryPanel(d),
-              subtitle: 'Sum of reviewed item lines · excludes tax and uncategorized gaps'),
-          _section('Top purchased products', _topProducts(d),
-              subtitle: 'Recorded receipt line amounts, not unit prices'),
+          LayoutBuilder(
+            builder: (context, box) {
+              final categories = _section(
+                'By product category', _categoryPanel(d),
+                subtitle: 'Reviewed item lines, excluding taxes and gaps',
+              );
+              final products = _section(
+                'Top purchased products', _topProducts(d),
+                subtitle: 'Receipt line amounts, not unit prices',
+              );
+              if (box.maxWidth >= 760) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: categories),
+                    const SizedBox(width: 18),
+                    Expanded(child: products),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [categories, products],
+              );
+            },
+          ),
           if (d.pendingCount > 0) _pending(d),
           _section('Recent transactions', _purchases(d),
               subtitle: 'Most recent records across all dates and currencies'),
