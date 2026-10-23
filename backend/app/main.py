@@ -34,6 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .health import router as health_router
 from .category_router import router as category_router
+from .dashboard import router as dashboard_router
 
 app = FastAPI(
     title="SpendWise AI",
@@ -53,6 +54,7 @@ app.include_router(assistant_router)
 
 app.include_router(health_router)
 app.include_router(category_router)
+app.include_router(dashboard_router)
 
 local_origins = [
     "http://localhost:5173",
