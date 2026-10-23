@@ -18,7 +18,6 @@ abstract final class TerminalColors {
 }
 
 ThemeData createTerminalTheme() {
-  const colors = TerminalColors;
   final base = ThemeData.dark(useMaterial3: true);
   const round = BorderRadius.all(Radius.circular(12));
   final fieldBorder = OutlineInputBorder(
