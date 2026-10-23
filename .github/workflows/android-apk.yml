@@ -1,0 +1,66 @@
+name: Build Signed Android APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Check public build configuration and signing secrets
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          SIGNING_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -eu
+          case "$API_BASE_URL" in https://*) ;; *) echo "::error::API_BASE_URL must be HTTPS"; exit 1;; esac
+          case "$SUPABASE_URL" in https://*) ;; *) echo "::error::SUPABASE_URL must be HTTPS"; exit 1;; esac
+          test -n "$SUPABASE_PUBLISHABLE_KEY" || (echo "::error::Missing Supabase publishable key"; exit 1)
+          test -n "$SIGNING_B64" || (echo "::error::Missing release keystore"; exit 1)
+          test -n "$STORE_PASS" || (echo "::error::Missing store password"; exit 1)
+          test -n "$KEY_PASS" || (echo "::error::Missing key password"; exit 1)
+          test -n "$KEY_ALIAS" || (echo "::error::Missing key alias"; exit 1)
+          printf '%s' "$SIGNING_B64" | base64 --decode > mobile/android/app/upload-keystore.jks
+          umask 077
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
+            "$STORE_PASS" "$KEY_PASS" "$KEY_ALIAS" > mobile/android/key.properties
+
+      - name: Build signed release APK
+        working-directory: mobile
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          flutter pub get
+          flutter build apk --release \
+            --dart-define="API_BASE_URL=$API_BASE_URL" \
+            --dart-define="SUPABASE_URL=$SUPABASE_URL" \
+            --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
+          test -s build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: spendwise-android-signed
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
