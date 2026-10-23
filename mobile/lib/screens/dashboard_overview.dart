@@ -37,6 +37,7 @@ class _DashboardOverviewState extends State<DashboardOverview> {
     DateTime.now().toUtc().month,
   );
   bool _loading = true;
+  String? _deletingReceiptId;
 
   @override
   void initState() {
@@ -342,6 +343,57 @@ class _DashboardOverviewState extends State<DashboardOverview> {
     )).toList()));
   }
 
+  Future<void> _deletePendingReceipt(PendingReceipt receipt) async {
+    if (_deletingReceiptId != null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('DELETE SAVED RECEIPT?'),
+        content: Text(
+          'Remove "${receipt.filename}" and its unfinished transaction '
+          'drafts? The stored receipt image will also be deleted. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.delete_forever_outlined),
+            label: const Text('Delete receipt'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _deletingReceiptId = receipt.id;
+    });
+    try {
+      await _api.deletePendingReceipt(receipt.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unfinished receipt deleted.')),
+      );
+      await _load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not delete receipt. Try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _deletingReceiptId = null);
+    }
+  }
+
   Widget _pending(SpendingDashboard d) {
     return _section(
       'Needs attention',
@@ -352,8 +404,31 @@ class _DashboardOverviewState extends State<DashboardOverview> {
           title: Text(receipt.filename, maxLines: 1,
               overflow: TextOverflow.ellipsis),
           subtitle: Text(receipt.status.replaceAll('_', ' ')),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => widget.onResume(receipt),
+          trailing: SizedBox(
+            width: 96,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Delete ${receipt.filename}',
+                  onPressed: _deletingReceiptId != null
+                      ? null
+                      : () => _deletePendingReceipt(receipt),
+                  icon: _deletingReceiptId == receipt.id
+                      ? const SizedBox(
+                          width: 20, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.delete_outline,
+                          color: TerminalColors.danger),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+          ),
+          onTap: _deletingReceiptId != null
+              ? null
+              : () => widget.onResume(receipt),
         )).toList(),
       )),
       subtitle: '${d.pendingCount} saved receipt(s) awaiting processing or approval',
