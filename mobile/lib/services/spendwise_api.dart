@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'document_models.dart';
+import 'dashboard_models.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -166,6 +167,17 @@ class SpendwiseApi {
     } on FormatException {
       throw ApiException(0, 'Server returned invalid JSON.');
     }
+  }
+
+  Future<SpendingDashboard> getDashboard({
+    String currency = 'USD',
+    String? month,
+  }) async {
+    final params = <String, String>{'currency': currency};
+    if (month != null) params['month'] = month;
+    final uri = Uri(path: '/api/v1/dashboard', queryParameters: params);
+    final result = await _request(uri.toString());
+    return SpendingDashboard(Map<String, dynamic>.from(result as Map));
   }
 
   Future<List<TransactionRecord>> getTransactions() async {

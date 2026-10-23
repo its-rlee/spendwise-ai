@@ -13,10 +13,12 @@ class DocumentReviewScreen extends StatefulWidget {
     super.key,
     this.initialReceiptBytes,
     this.initialReceiptFilename,
+    this.initialDocumentId,
   });
 
   final Uint8List? initialReceiptBytes;
   final String? initialReceiptFilename;
+  final String? initialDocumentId;
 
   @override
   State<DocumentReviewScreen> createState() => _DocumentReviewScreenState();
@@ -38,6 +40,15 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
   @override
   void initState() {
     super.initState();
+
+    if (widget.initialDocumentId != null) {
+      _documentId = widget.initialDocumentId;
+      _filename = widget.initialReceiptFilename ?? 'Saved receipt';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _run(_fetchDrafts);
+      });
+      return;
+    }
 
     final image = widget.initialReceiptBytes;
     if (image == null) return;

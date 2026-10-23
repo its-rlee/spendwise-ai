@@ -9,6 +9,8 @@ import '../services/spendwise_api.dart';
 import 'document_review_screen.dart';
 
 import 'scan_screen.dart';
+import 'dashboard_overview.dart';
+import '../services/dashboard_models.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,12 +26,9 @@ class _HomeScreenState extends State<HomeScreen> {
     text: 'How much did I spend on groceries this month?',
   );
 
-  List<TransactionRecord> _transactions = [];
-
-  bool _loadingTransactions = true;
+  int _dashboardRevision = 0;
   bool _asking = false;
 
-  String? _transactionError;
   String? _assistantError;
   AssistantReply? _reply;
   // Conversation is intentionally held only in memory, not local storage.
@@ -39,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
 
-    _loadTransactions();
 
     // After login, launch the receipt scanner on Android.
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
@@ -56,33 +54,29 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _loadTransactions() async {
-    setState(() {
-      _loadingTransactions = true;
-      _transactionError = null;
-    });
+  void _refreshDashboard() {
+    if (mounted) setState(() => _dashboardRevision++);
+  }
 
-    try {
-      final result = await _api.getTransactions();
+  Future<void> _openUpload() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const DocumentReviewScreen(),
+      ),
+    );
+    _refreshDashboard();
+  }
 
-      if (!mounted) return;
-
-      setState(() {
-        _transactions = result;
-      });
-    } catch (error) {
-      if (!mounted) return;
-
-      setState(() {
-        _transactionError = error.toString();
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingTransactions = false;
-        });
-      }
-    }
+  Future<void> _resumeReceipt(PendingReceipt pending) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DocumentReviewScreen(
+          initialDocumentId: pending.id,
+          initialReceiptFilename: pending.filename,
+        ),
+      ),
+    );
+    _refreshDashboard();
   }
 
   Future<void> _askAssistant() async {
@@ -123,13 +117,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openScanner() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const ScanScreen()));
-
-    if (mounted) {
-      await _loadTransactions();
-    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ScanScreen()),
+    );
+    _refreshDashboard();
   }
 
   @override
@@ -143,17 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             tooltip: 'Upload financial document',
             icon: const Icon(Icons.upload_file),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const DocumentReviewScreen(),
-                ),
-              );
-
-              if (mounted) {
-                await _loadTransactions();
-              }
-            },
+            onPressed: _openUpload,
           ),
           IconButton(
             tooltip: 'Scan receipt',
@@ -182,46 +163,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 24),
 
-              Text(
-                'My Transactions',
-                style: Theme.of(context).textTheme.titleLarge,
+              DashboardOverview(
+                key: ValueKey(_dashboardRevision),
+                onScan: _openScanner,
+                onResume: _resumeReceipt,
               ),
-
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: _loadingTransactions ? null : _loadTransactions,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh'),
-                ),
-              ),
-
-              if (_loadingTransactions)
-                const Center(child: CircularProgressIndicator())
-              else if (_transactionError != null)
-                Text(
-                  _transactionError!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                )
-              else if (_transactions.isEmpty)
-                const Text('No approved transactions found.')
-              else
-                ..._transactions.map(
-                  (transaction) => Card(
-                    child: ListTile(
-                      title: Text(transaction.merchant),
-                      subtitle: Text(
-                        '${transaction.category} · '
-                        '${transaction.date ?? "No date"}',
-                      ),
-                      trailing: Text(
-                        '${transaction.direction == "debit" ? "-" : "+"}'
-                        '${transaction.currency} '
-                        '${transaction.amount}',
-                      ),
-                    ),
-                  ),
-                ),
 
               const SizedBox(height: 32),
 
