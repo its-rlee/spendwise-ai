@@ -1,4 +1,4 @@
-package com.example.mobile
+package com.itsrlee.spendwise
 
 import io.flutter.embedding.android.FlutterActivity
 

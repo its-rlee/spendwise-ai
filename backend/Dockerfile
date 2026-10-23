@@ -26,6 +26,7 @@ RUN python -m pip install -r requirements.txt
 
 # Copy only our application code
 COPY app ./app
+COPY start.sh ./start.sh
 
 # Run the web application as a non-root user
 RUN useradd --create-home --uid 10001 appuser
@@ -36,4 +37,4 @@ USER appuser
 EXPOSE 8000
 
 # Start FastAPI
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "./start.sh"]

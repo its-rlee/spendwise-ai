@@ -23,3 +23,9 @@ ml/data/reviewed_*.csv
 
 # Locally trained model (not a source artifact)
 backend/ml_models/
+
+# Android signing materials (never commit)
+mobile/android/key.properties
+mobile/android/app/*.jks
+mobile/android/app/*.keystore
+mobile/config/release.json
