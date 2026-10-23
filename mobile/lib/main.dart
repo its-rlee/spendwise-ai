@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/home_screen.dart';
@@ -14,6 +15,22 @@ Future<void> main() async {
 
   if (url.isEmpty || key.isEmpty) {
     throw StateError('Missing Supabase configuration');
+  }
+
+  // Fail closed: publicly distributed builds must not connect over HTTP
+  // or accidentally point to the developer's localhost backend.
+  const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
+  if (kReleaseMode) {
+    final apiUri = Uri.tryParse(apiBaseUrl);
+    if (apiUri == null ||
+        apiUri.scheme != 'https' ||
+        apiUri.host.isEmpty ||
+        ['localhost', '127.0.0.1', '10.0.2.2'].contains(apiUri.host)) {
+      throw StateError('Release builds require a public HTTPS API_BASE_URL');
+    }
+    if (!url.startsWith('https://')) {
+      throw StateError('Release builds require an HTTPS SUPABASE_URL');
+    }
   }
 
   await Supabase.initialize(url: url, publishableKey: key);
