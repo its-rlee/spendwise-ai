@@ -28,6 +28,10 @@ RUN python -m pip install -r requirements.txt
 COPY app ./app
 COPY start.sh ./start.sh
 
+# Windows checkouts may supply CRLF; POSIX /bin/sh requires LF.
+# Normalize inside Linux so builds work even before developers re-checkout.
+RUN sed -i 's/\r$//' ./start.sh
+
 # Run the web application as a non-root user
 RUN useradd --create-home --uid 10001 appuser
 
