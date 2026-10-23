@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'theme/terminal_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,9 +47,13 @@ class SpendWiseApp extends StatelessWidget {
     return MaterialApp(
       title: 'SpendWise AI',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-        useMaterial3: true,
+      theme: createTerminalTheme(),
+      builder: (context, child) => Stack(
+        fit: StackFit.expand,
+        children: [
+          child ?? const SizedBox.shrink(),
+          const Positioned.fill(child: TerminalAtmosphere()),
+        ],
       ),
       home: const AuthGate(),
     );

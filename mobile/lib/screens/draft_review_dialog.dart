@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/document_models.dart';
+import '../theme/terminal_theme.dart';
 
 Future<Map<String, dynamic>?> showDraftEditDialog(
   BuildContext context,
@@ -112,9 +113,9 @@ class _DraftEditDialogState extends State<_DraftEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Review transaction'),
+      title: const TerminalSectionTitle('Verify transaction', index: '04'),
       content: SizedBox(
-        width: 420,
+        width: 440,
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,
@@ -259,7 +260,7 @@ class _RejectDialogState extends State<_RejectDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Reject transaction'),
+      title: const TerminalSectionTitle('Reject transaction', index: 'ERR'),
       content: TextField(
         controller: _controller,
         maxLength: 500,
