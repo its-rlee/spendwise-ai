@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
+import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/spendwise_api.dart';
+import '../theme/terminal_theme.dart';
 import 'document_review_screen.dart';
 
 class ScanScreen extends StatefulWidget {
@@ -12,234 +16,348 @@ class ScanScreen extends StatefulWidget {
   State<ScanScreen> createState() => _ScanScreenState();
 }
 
-class _ScanScreenState extends State<ScanScreen> {
-  final ImagePicker _picker = ImagePicker();
-
-  static const ink = Color(0xFF112624);
-  static const lime = Color(0xFFCBF575);
-
+class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
+  final _picker = ImagePicker();
+  CameraController? _controller;
+  List<CameraDescription> _cameras = [];
+  CameraDescription? _selected;
+  bool _opening = false;
   bool _busy = false;
   String? _error;
+
+  bool get _ready => _controller?.value.isInitialized == true;
 
   @override
   void initState() {
     super.initState();
-
-    // Open the camera automatically when this screen appears.
-    // On web, keep the import option instead.
+    WidgetsBinding.instance.addObserver(this);
+    // Browser camera permissions often need a direct user interaction;
+    // native Android may initialize automatically.
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _capture();
+        if (mounted) _openCamera();
       });
     }
   }
 
-  Future<void> _capture({bool fromGallery = false}) async {
-    if (_busy) return;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (kIsWeb) return;
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _releaseCamera();
+    }
+    if (state == AppLifecycleState.resumed && !_busy && !_opening) {
+      _openCamera();
+    }
+  }
 
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+  Future<void> _releaseCamera() async {
+    final old = _controller;
+    _controller = null;
+    if (mounted) setState(() {});
+    await old?.dispose();
+  }
 
+  Future<void> _openCamera({CameraDescription? device}) async {
+    if (_opening || _busy || _ready) return;
+    setState(() { _opening = true; _error = null; });
+    CameraController? next;
     try {
-      final photo = await _picker.pickImage(
-        source: fromGallery ? ImageSource.gallery : ImageSource.camera,
-        maxWidth: 2400,
-        maxHeight: 3200,
-        imageQuality: 88,
-      );
-
-      if (!mounted || photo == null) return;
-
-      final filename = photo.name.toLowerCase();
-
-      if (!filename.endsWith('.jpg') &&
-          !filename.endsWith('.jpeg') &&
-          !filename.endsWith('.png')) {
-        throw ApiException(415, 'Please use a JPG or PNG receipt photo.');
+      final available = await availableCameras();
+      if (available.isEmpty) {
+        throw StateError('No camera detected');
       }
+      final selected = device ?? available.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.back,
+        orElse: () => available.first,
+      );
+      next = CameraController(
+        selected,
+        ResolutionPreset.high,
+        enableAudio: false,
+      );
+      await next.initialize();
+      if (!mounted) {
+        await next.dispose();
+        return;
+      }
+      _cameras = available;
+      _selected = selected;
+      final previous = _controller;
+      setState(() => _controller = next);
+      await previous?.dispose();
+    } catch (_) {
+      await next?.dispose();
+      if (mounted) {
+        setState(() {
+          _error = 'Camera access unavailable. Allow permission in your '
+              'browser/device settings, or import a photo.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  Future<void> _switchCamera() async {
+    if (_busy || _opening || _cameras.length < 2) return;
+    final currentIndex = _cameras.indexWhere(
+      (camera) => camera.name == _selected?.name,
+    );
+    final next = _cameras[(currentIndex + 1) % _cameras.length];
+    await _releaseCamera();
+    if (mounted) await _openCamera(device: next);
+  }
+
+  Future<void> _capture({bool importPhoto = false}) async {
+    if (_busy || _opening) return;
+    setState(() { _busy = true; _error = null; });
+    try {
+      final XFile? photo;
+      if (importPhoto) {
+        photo = await _picker.pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 2400, maxHeight: 3200, imageQuality: 88,
+        );
+      } else {
+        if (!_ready || _controller == null) {
+          throw StateError('Camera not ready');
+        }
+        photo = await _controller!.takePicture();
+      }
+      if (photo == null || !mounted) return;
 
       final Uint8List bytes = await photo.readAsBytes();
-
       if (bytes.isEmpty || bytes.length > SpendwiseApi.maxDocumentBytes) {
-        throw ApiException(413, 'The receipt image must be under 5 MB.');
+        throw ApiException(413, 'Image exceeds 5 MB. Import a smaller photo.');
       }
-
+      final filename = importPhoto
+          ? photo.name
+          : 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      if (!filename.toLowerCase().endsWith('.jpg') &&
+          !filename.toLowerCase().endsWith('.jpeg') &&
+          !filename.toLowerCase().endsWith('.png')) {
+        throw ApiException(415, 'Use a JPEG or PNG receipt photo.');
+      }
+      await _releaseCamera();
       if (!mounted) return;
-
-      setState(() => _busy = false);
-
-      // Pass the photo into the existing Gemini workflow.
       final action = await Navigator.push<String>(
         context,
         MaterialPageRoute(
           builder: (_) => DocumentReviewScreen(
             initialReceiptBytes: bytes,
-            initialReceiptFilename: photo.name,
+            initialReceiptFilename: filename,
           ),
         ),
       );
-
       if (!mounted) return;
-
       if (action == 'dashboard') {
         Navigator.pop(context);
-      } else if (action == 'scan') {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _capture();
-        });
+        return;
       }
     } catch (error) {
       if (mounted) {
-        setState(() {
-          _error = error is ApiException
-              ? error.message
-              : 'Could not open or read the receipt photo.';
-        });
+        setState(() => _error = error is ApiException
+            ? error.message
+            : 'Capture unsuccessful. Try another photo.');
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+        if (!_ready) _openCamera();
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Widget _cameraView() {
+    return Container(
+      height: 390,
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: TerminalColors.background,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: TerminalColors.soft),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_ready)
+            Center(child: CameraPreview(_controller!))
+          else
+            Center(child: _opening
+                ? const TerminalLoading(label: 'CAMERA INITIALIZING')
+                : const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.center_focus_strong, size: 78,
+                          color: TerminalColors.soft),
+                      SizedBox(height: 18),
+                      Text('CAMERA STANDBY',
+                          style: TextStyle(
+                            letterSpacing: 2,
+                            color: TerminalColors.phosphor,
+                          )),
+                    ],
+                  )),
+          IgnorePointer(
+            child: Center(
+              child: FractionallySizedBox(
+                widthFactor: 0.83, heightFactor: 0.78,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: TerminalColors.phosphor.withValues(alpha: 0.6),
+                      width: 1.4,
+                    ),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.add, color: TerminalColors.phosphor,
+                        size: 18),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const Positioned(
+            top: 17, left: 16,
+            child: Text('SCAN / OPTICAL INPUT',
+                style: TextStyle(color: TerminalColors.phosphor,
+                    fontSize: 10, letterSpacing: 1.5)),
+          ),
+          const Positioned(
+            bottom: 16, left: 16,
+            child: Text('ALIGN ALL RECEIPT EDGES',
+                style: TextStyle(color: TerminalColors.phosphor,
+                    fontSize: 10, letterSpacing: 1.5)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _controls() {
+    return TerminalPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const TerminalSectionTitle('Optical scanner', index: '02'),
+          const SizedBox(height: 14),
+          const Text(
+            'Keep the entire receipt in frame. '
+            'Sharp text and even lighting improve AI extraction.',
+            style: TextStyle(color: TerminalColors.muted, height: 1.6),
+          ),
+          const SizedBox(height: 20),
+          if (_error != null) ...[
+            Text(_error!, style: const TextStyle(color: TerminalColors.danger)),
+            const SizedBox(height: 15),
+          ],
+          if (!_ready && !_opening)
+            TerminalActionButton(
+              label: 'Activate live camera',
+              icon: Icons.videocam_outlined,
+              onPressed: _busy ? null : _openCamera,
+            )
+          else
+            TerminalActionButton(
+              label: 'Capture receipt',
+              icon: Icons.camera_alt_rounded,
+              onPressed: _ready && !_busy ? () => _capture() : null,
+              busy: _busy,
+            ),
+          const SizedBox(height: 12),
+          TerminalActionButton(
+            label: 'Import existing image',
+            icon: Icons.photo_library_outlined,
+            onPressed: _busy ? null : () => _capture(importPhoto: true),
+            primary: false,
+          ),
+          if (_cameras.length > 1) ...[
+            const SizedBox(height: 9),
+            TextButton.icon(
+              onPressed: _busy ? null : _switchCamera,
+              icon: const Icon(Icons.flip_camera_android_outlined),
+              label: const Text('Switch camera'),
+            ),
+          ],
+          const SizedBox(height: 18),
+          const Text('PIPELINE STATUS', style: TextStyle(
+            color: TerminalColors.amber, fontSize: 11, letterSpacing: 1.5,
+          )),
+          const SizedBox(height: 8),
+          const Text(
+            '01  IMAGE CAPTURE\n02  PRIVATE UPLOAD\n'
+            '03  GEMINI EXTRACTION\n04  HUMAN VERIFICATION',
+            style: TextStyle(
+              color: TerminalColors.soft, fontSize: 11, height: 2,
+            ),
+          ),
+          const SizedBox(height: 15),
+          TextButton.icon(
+            onPressed: _busy ? null : () => Navigator.pop(context),
+            icon: const Icon(Icons.dashboard_outlined),
+            label: const Text('Return to dashboard'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: ink,
       appBar: AppBar(
-        backgroundColor: ink,
-        foregroundColor: Colors.white,
-        title: const Text(
-          'spendwise.',
-          style: TextStyle(fontWeight: FontWeight.w900),
-        ),
+        title: const TerminalLogo(size: 39),
       ),
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  const SizedBox(height: 24),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Ready to\nscan?',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 42,
-                        height: 1.08,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -1.5,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Capture your receipt. Let AI handle the details.',
-                      style: TextStyle(color: Color(0xFFB8CDCA), fontSize: 16),
-                    ),
-                  ),
-                  const Spacer(),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: _busy
-                        ? const Column(
-                            key: ValueKey('busy'),
-                            children: [
-                              CircularProgressIndicator(color: lime),
-                              SizedBox(height: 20),
-                              Text(
-                                'Opening camera...',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                            ],
-                          )
-                        : Container(
-                            key: const ValueKey('ready'),
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 56,
-                              horizontal: 20,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1C3633),
-                              borderRadius: BorderRadius.circular(28),
-                              border: Border.all(
-                                color: const Color(0xFF53716B),
-                                width: 1.5,
-                              ),
-                            ),
-                            child: const Column(
-                              children: [
-                                Icon(
-                                  Icons.receipt_long_rounded,
-                                  color: lime,
-                                  size: 96,
-                                ),
-                                SizedBox(height: 18),
-                                Text(
-                                  'Your next receipt goes here',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                  ),
-                  const Spacer(),
-                  if (_error != null) ...[
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Color(0xFFFFAB99)),
-                    ),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 880;
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 17, 20, 36),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const TerminalSectionTitle('Field acquisition', index: '01'),
                     const SizedBox(height: 12),
-                  ],
-                  SizedBox(
-                    width: double.infinity,
-                    height: 58,
-                    child: FilledButton.icon(
-                      onPressed: _busy ? null : () => _capture(),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: lime,
-                        foregroundColor: ink,
-                      ),
-                      icon: const Icon(Icons.camera_alt_rounded),
-                      label: const Text(
-                        'Scan receipt',
+                    const Text('SCAN A RECEIPT.',
                         style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextButton.icon(
-                    onPressed: _busy ? null : () => _capture(fromGallery: true),
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('Import existing photo'),
-                    style: TextButton.styleFrom(foregroundColor: Colors.white),
-                  ),
-                  TextButton(
-                    onPressed: _busy ? null : () => Navigator.pop(context),
-                    child: const Text('Go to dashboard'),
-                  ),
-                ],
+                          fontSize: 30, color: TerminalColors.phosphor,
+                          fontWeight: FontWeight.w900, letterSpacing: -1,
+                        )),
+                    const SizedBox(height: 21),
+                    if (wide)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 3, child: _cameraView()),
+                          const SizedBox(width: 20),
+                          Expanded(flex: 2, child: _controls()),
+                        ],
+                      )
+                    else ...[
+                      _cameraView(),
+                      const SizedBox(height: 18),
+                      _controls(),
+                    ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        }),
       ),
     );
   }
