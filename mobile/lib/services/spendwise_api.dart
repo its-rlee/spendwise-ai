@@ -169,6 +169,24 @@ class SpendwiseApi {
     }
   }
 
+  Future<void> deletePendingReceipt(String documentId) async {
+    final token = await _tokenProvider();
+    final uri = Uri.parse(
+      '$baseUrl/api/v1/receipts/${Uri.encodeComponent(documentId)}',
+    );
+    try {
+      final response = await _client.delete(
+        uri,
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 40));
+      checkResponse(response);
+    } on TimeoutException {
+      throw ApiException(0, 'Receipt deletion timed out. Refresh to check its status.');
+    } on http.ClientException {
+      throw ApiException(0, 'Cannot connect to FastAPI.');
+    }
+  }
+
   Future<SpendingDashboard> getDashboard({
     String currency = 'USD',
     String? month,

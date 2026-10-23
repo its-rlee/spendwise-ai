@@ -12,8 +12,10 @@ from fastapi import (
     File,
     HTTPException,
     UploadFile,
+    Response,
 )
 from pydantic import BaseModel
+from sqlalchemy import delete, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -22,7 +24,7 @@ from .image_service import (
     MAX_UPLOAD_BYTES,
     normalize_receipt_image,
 )
-from .models import Document
+from .models import Document, Transaction, TransactionDraft
 from .ocr_service import get_ocr_reader
 from .s3_service import get_s3_client
 from .auth import AuthUser, get_current_user
@@ -180,3 +182,92 @@ def upload_receipt(
         status=document.status,
         ocr_text=extracted_text,
     )
+
+
+
+@router.delete("/{document_id}", status_code=204)
+def delete_pending_receipt(
+    document_id: str,
+    db: Session = Depends(get_db),
+    s3=Depends(get_s3_client),
+    user: AuthUser = Depends(get_current_user),
+):
+    """Delete a user's unapproved receipt and any provisional drafts.
+
+    Approved financial records cannot be removed through this endpoint.
+    S3 deletion happens first; if database cleanup fails, the user can
+    safely retry the same deletion (object deletion is idempotent).
+    """
+    document = db.scalar(
+        select(Document)
+        .where(
+            Document.id == document_id,
+            Document.user_id == user.id,
+        )
+        .with_for_update()
+    )
+
+    if document is None or not document.s3_key.startswith(
+        f"receipts/{user.id}/"
+    ):
+        raise HTTPException(status_code=404, detail="Receipt not found")
+
+    if document.status not in {
+        "uploaded", "text_ready", "needs_review", "awaiting_review",
+    }:
+        raise HTTPException(
+            status_code=409,
+            detail="Only unfinished receipts can be deleted here",
+        )
+
+    approved_transaction = db.scalar(
+        select(Transaction.id)
+        .where(Transaction.source_document_id == document.id)
+        .limit(1)
+    )
+    approved_draft = db.scalar(
+        select(TransactionDraft.id)
+        .where(
+            TransactionDraft.document_id == document.id,
+            TransactionDraft.status == "approved",
+        )
+        .limit(1)
+    )
+
+    if approved_transaction is not None or approved_draft is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Receipt has an approved transaction and cannot be deleted here",
+        )
+
+    # Never trust a filename or object key supplied by the client:
+    # delete only the key persisted on the user's own document row.
+    try:
+        s3.delete_object(
+            Bucket=os.environ["AWS_S3_BUCKET"],
+            Key=document.s3_key,
+        )
+    except (BotoCoreError, ClientError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="Receipt storage unavailable. Nothing was removed from your records.",
+        ) from exc
+
+    try:
+        db.execute(
+            delete(TransactionDraft).where(
+                TransactionDraft.document_id == document.id,
+                TransactionDraft.user_id == user.id,
+            )
+        )
+        db.delete(document)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="Could not finish receipt deletion. Please retry.",
+        ) from exc
+
+    return Response(status_code=204)
