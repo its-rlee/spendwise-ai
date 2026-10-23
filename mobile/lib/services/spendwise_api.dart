@@ -147,7 +147,7 @@ class SpendwiseApi {
       if (body == null) {
         response = await _client
             .get(uri, headers: headers)
-            .timeout(const Duration(seconds: 30));
+            .timeout(const Duration(seconds: 90));
       } else {
         response = await _client
             .post(uri, headers: headers, body: jsonEncode(body))
