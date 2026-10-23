@@ -23,6 +23,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   CameraDescription? _selected;
   bool _opening = false;
   bool _busy = false;
+  bool _leaving = false;
   String? _error;
 
   bool get _ready => _controller?.value.isInitialized == true;
@@ -153,6 +154,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
       );
       if (!mounted) return;
       if (action == 'dashboard') {
+        _leaving = true;
         Navigator.pop(context);
         return;
       }
@@ -165,7 +167,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
     } finally {
       if (mounted) {
         setState(() => _busy = false);
-        if (!_ready) _openCamera();
+        if (!_leaving && !_ready) _openCamera();
       }
     }
   }
@@ -208,6 +210,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                           )),
                     ],
                   )),
+          const Positioned.fill(child: _ScanSweep()),
           IgnorePointer(
             child: Center(
               child: FractionallySizedBox(
@@ -358,6 +361,73 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
             ),
           );
         }),
+      ),
+    );
+  }
+}
+
+class _ScanSweep extends StatefulWidget {
+  const _ScanSweep();
+
+  @override
+  State<_ScanSweep> createState() => _ScanSweepState();
+}
+
+class _ScanSweepState extends State<_ScanSweep>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animation = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.of(context).disableAnimations) {
+      _animation.stop();
+    } else if (!_animation.isAnimating) {
+      _animation.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _animation.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ExcludeSemantics(
+        child: RepaintBoundary(
+          child: AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) => Align(
+              alignment: Alignment(0, -0.87 + _animation.value * 1.74),
+              child: Container(
+                height: 2,
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      TerminalColors.phosphor.withValues(alpha: 0.5),
+                      Colors.transparent,
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: TerminalColors.phosphor.withValues(alpha: 0.25),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
