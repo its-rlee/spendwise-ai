@@ -7,6 +7,7 @@ import '../services/document_models.dart';
 import '../services/spendwise_api.dart';
 import 'draft_review_dialog.dart';
 import 'receipt_items_editor.dart';
+import '../theme/terminal_theme.dart';
 
 class DocumentReviewScreen extends StatefulWidget {
   const DocumentReviewScreen({
@@ -274,7 +275,7 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
                 const Icon(
                   Icons.check_circle_rounded,
                   size: 56,
-                  color: Color(0xFF237B65),
+                  color: TerminalColors.phosphor,
                 ),
                 const SizedBox(height: 12),
                 const Text(
@@ -317,31 +318,6 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
     });
   }
 
-  Future<void> _suggestAndReview(TransactionDraftRecord draft) async {
-    await _run(() async {
-      final suggestions = await _api.suggestDraftCategories(draft.id);
-      if (!mounted) return;
-      final overrides = <int, String>{};
-      for (final suggestion in suggestions) {
-        final index = suggestion['line_index'];
-        final category = suggestion['category'];
-        if (index is int && category is String && category.isNotEmpty) {
-          overrides[index] = category;
-        }
-      }
-      final edited = await showDialog<List<Map<String, dynamic>>>(
-        context: context,
-        builder: (_) => ReceiptItemsEditor(
-          initialItems: draft.receiptItems,
-          suggestedCategories: overrides,
-        ),
-      );
-      if (edited == null || !mounted) return;
-      await _api.saveDraftItems(draft.id, edited);
-      await _fetchDrafts();
-    });
-  }
-
   bool get _isReceipt {
     final name = (_filename ?? '').toLowerCase();
 
@@ -369,24 +345,20 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.initialReceiptBytes != null
-              ? 'Review your receipt'
-              : 'Document Review',
-        ),
+        title: const TerminalLogo(size: 36),
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760),
+          constraints: const BoxConstraints(maxWidth: 880),
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
               if (widget.initialReceiptBytes != null) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
+                TerminalPanel(
                   child: Image.memory(
                     widget.initialReceiptBytes!,
-                    height: 220,
+                    width: double.infinity,
+                    height: 280,
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -397,14 +369,17 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
                 ),
                 const SizedBox(height: 20),
               ],
-              Text(
-                'Upload a fictional receipt or statement',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              const TerminalSectionTitle('Verify document', index: '03'),
               const SizedBox(height: 12),
               const Text(
-                'Supported: PDF, JPG, JPEG, PNG. '
-                'Maximum file size: 5 MB.',
+                'VERIFY ALL AMOUNTS BEFORE APPROVAL. '
+                'PDF, JPG OR PNG · MAX 5 MB',
+                style: TextStyle(
+                  color: TerminalColors.muted,
+                  fontSize: 11,
+                  letterSpacing: 1.1,
+                  height: 1.7,
+                ),
               ),
               const SizedBox(height: 12),
               if (widget.initialReceiptBytes == null) ...[
@@ -443,7 +418,15 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
                 ),
               ],
 
-              if (_busy) const LinearProgressIndicator(),
+              if (_busy)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: TerminalPanel(
+                    child: Center(
+                      child: TerminalLoading(label: 'ANALYZING / SECURE LINK'),
+                    ),
+                  ),
+                ),
 
               if (_message != null)
                 Padding(
@@ -464,9 +447,8 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
 
               if (_drafts.isNotEmpty) ...[
                 const SizedBox(height: 24),
-                Text(
-                  'AI Transaction Drafts',
-                  style: Theme.of(context).textTheme.titleLarge,
+                const TerminalSectionTitle(
+                  'AI extraction / human verification', index: '04',
                 ),
               ],
 
@@ -480,7 +462,12 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
                       children: [
                         Text(
                           draft.merchant ?? 'Unknown merchant',
-                          style: Theme.of(context).textTheme.titleMedium,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            color: TerminalColors.phosphor,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.6,
+                          ),
                         ),
                         Text(
                           '${draft.currency ?? "Unknown currency"} '
@@ -535,14 +522,7 @@ class _DocumentReviewScreenState extends State<DocumentReviewScreen> {
                             ),
                           ),
 
-                        if (draft.status == 'pending' && _isReceipt)
-                          TextButton.icon(
-                            onPressed: _busy
-                                ? null
-                                : () => _suggestAndReview(draft),
-                            icon: const Icon(Icons.auto_fix_high),
-                            label: const Text('Suggest categories (ML/Ollama)'),
-                          ),
+
 
                         if (draft.status == 'pending')
                           Wrap(
