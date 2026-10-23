@@ -1,7 +1,9 @@
 import base64
 import json
 import os
+import logging
 from decimal import Decimal
+from pydantic import ValidationError
 
 import httpx
 
@@ -129,6 +131,7 @@ into name when a reliable expansion is available.
 - Preserve the original abbreviation in raw_description.
 """
 
+logger = logging.getLogger(__name__)
 
 class GeminiReceiptExtractor:
     def __init__(self):
@@ -193,7 +196,34 @@ class GeminiReceiptExtractor:
             result = json.loads(text)
             receipt = ReceiptExtraction.model_validate(result)
 
+        except ValidationError as exc:
+            errors = [
+                {
+                    "field": ".".join(map(str, error["loc"])),
+                    "type": error["type"],
+                }
+                for error in exc.errors(
+                    include_input=False,
+                    include_context=False,
+                    include_url=False,
+                )
+            ]
+
+            logger.warning(
+                "Gemini receipt validation errors: %s",
+                errors,
+            )
+
+            raise ModelOutputError(
+                "Gemini returned invalid receipt data"
+            ) from exc
+
         except (KeyError, IndexError, TypeError, ValueError) as exc:
+            logger.warning(
+                "Gemini response parsing failed: %s",
+                type(exc).__name__,
+            )
+
             raise ModelOutputError(
                 "Gemini returned invalid receipt data"
             ) from exc
