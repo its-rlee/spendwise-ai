@@ -1,0 +1,58 @@
+name: Publish SpendWise Web Preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: spendwise-web-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Validate public endpoint configuration
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -eu
+          case "$API_BASE_URL" in https://*) ;; *) echo "::error::API_BASE_URL must be HTTPS"; exit 1;; esac
+          case "$SUPABASE_URL" in https://*) ;; *) echo "::error::SUPABASE_URL must be HTTPS"; exit 1;; esac
+          test -n "$SUPABASE_PUBLISHABLE_KEY" || exit 1
+
+      - name: Build Flutter web for GitHub Pages subpath
+        working-directory: mobile
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          flutter pub get
+          flutter build web --release --base-href "/spendwise-ai/" \
+            --dart-define="API_BASE_URL=$API_BASE_URL" \
+            --dart-define="SUPABASE_URL=$SUPABASE_URL" \
+            --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: mobile/build/web
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
