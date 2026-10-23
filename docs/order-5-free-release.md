@@ -126,17 +126,20 @@ For a phone APK, CORS does not apply, but TLS still does.
 
 ## 4. Free static web preview (GitHub Pages)
 
-1. In **Settings → Pages**, select **Source: GitHub Actions**.
-2. Under **Actions**, manually run **Publish SpendWise Web Preview**
-   from the branch containing this workflow.
-3. GitHub compiles Flutter Web using `--base-href /spendwise-ai/` and deploys
+1. Review the release PR and merge it into the **default branch** after
+   its checks pass. GitHub Actions' manual `workflow_dispatch` workflows must
+   exist on the default branch before they can be started through the UI.
+2. In **Settings → Pages**, select **Source: GitHub Actions**.
+3. Under **Actions**, manually run **Publish SpendWise Web Preview**
+   from `main`.
+4. GitHub compiles Flutter Web using `--base-href /spendwise-ai/` and deploys
    to a repo-scoped HTTPS URL. You must **confirm the actual published URL**
    shown in the Actions run.
-4. Test login, receipt upload, transaction review, and question answering.
+5. Test login, receipt upload, transaction review, and question answering.
    The browser camera experience in the current `image_picker` screen is
    **not yet a guaranteed live webcam preview**. On desktop browsers it may
    use the file picker; implementing `camera`/`camera_web` is separate.
-5. If Pages is inappropriate for your eventual application, deploy
+6. If Pages is inappropriate for your eventual application, deploy
    `mobile/build/web` to Cloudflare Pages Free instead. Build with
    `--base-href /` for a root-hosted domain and update CORS/auth origins.
 
@@ -165,8 +168,8 @@ Create these **GitHub Actions Secrets**:
 | `ANDROID_KEY_PASSWORD` | Key password |
 | `ANDROID_KEY_ALIAS` | `spendwise` |
 
-Run **Actions → Build Signed Android APK → Run workflow** from the release
-branch. If it succeeds, download the `spendwise-android-signed` artifact.
+After the workflow is merged into the default branch (`main`), run
+**Actions → Build Signed Android APK → Run workflow** from `main`. If it succeeds, download the `spendwise-android-signed` artifact.
 The artifact expires after 14 days; do not assume permanent distribution.
 
 After testing installation and login on a real device, you may create a
