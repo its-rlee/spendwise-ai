@@ -131,6 +131,20 @@ def run_document_extraction(
             detail="Document integrity check failed",
         )
 
+    # Cloud vision path: receipt image goes straight to Gemini.
+    if kind == "receipt" and callable(
+        getattr(extractor, "extract_image", None)
+    ):
+        try:
+            return extractor.extract_image(data)
+
+        except (httpx.HTTPError, ModelOutputError) as exc:
+            logger.exception("Gemini receipt extraction failed")
+            raise HTTPException(
+                status_code=502,
+                detail="Receipt image extraction failed",
+            ) from exc
+            
     if kind == "receipt":
         try:
             text = ocr_reader(data)

@@ -177,4 +177,10 @@ class OllamaExtractor:
 
 
 def get_extractor():
+    if os.getenv(
+        "RECEIPT_AI_PROVIDER", "ollama"
+    ).lower() == "gemini":
+        from .gemini_service import GeminiReceiptExtractor
+        return GeminiReceiptExtractor()
+
     return OllamaExtractor()

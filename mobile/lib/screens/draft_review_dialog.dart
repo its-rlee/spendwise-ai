@@ -32,6 +32,41 @@ class _DraftEditDialogState extends State<_DraftEditDialog> {
 
   String? _direction;
 
+  String _suggestTransactionCategory(TransactionDraftRecord draft) {
+    final categories = draft.receiptItems
+        .map((item) => item.category.trim().toLowerCase())
+        .where(
+          (category) =>
+              category.isNotEmpty &&
+              category != 'uncategorized' &&
+              category != 'other',
+        )
+        .toSet();
+
+    if (categories.isEmpty) return 'Uncategorized';
+
+    const groceryCategories = {
+      'meat',
+      'dairy',
+      'produce',
+      'bakery',
+      'beverages',
+      'frozen food',
+      'snacks',
+    };
+
+    if (categories.every(groceryCategories.contains)) {
+      return 'Groceries';
+    }
+
+    if (categories.length == 1) {
+      final category = categories.first;
+      return '${category[0].toUpperCase()}${category.substring(1)}';
+    }
+
+    return 'Mixed Shopping';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -42,7 +77,7 @@ class _DraftEditDialogState extends State<_DraftEditDialog> {
     _amount = TextEditingController(text: draft.amount ?? '');
     _date = TextEditingController(text: draft.transactionDate ?? '');
     _currency = TextEditingController(text: draft.currency ?? '');
-    _category = TextEditingController(text: 'Uncategorized');
+    _category = TextEditingController(text: _suggestTransactionCategory(draft));
 
     _direction = draft.direction == 'debit' || draft.direction == 'credit'
         ? draft.direction
