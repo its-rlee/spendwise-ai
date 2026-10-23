@@ -81,7 +81,7 @@ class DashboardResponse(BaseModel):
 @router.get("", response_model=DashboardResponse)
 def dashboard(
     currency: str = Query(default="USD", pattern=r"^[A-Z]{3}$"),
-    month: str | None = Query(default=None, pattern=r"^\\d{4}-(0[1-9]|1[0-2])$"),
+    month: str | None = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
     today: date = Depends(get_utc_today),
