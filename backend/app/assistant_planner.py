@@ -271,6 +271,7 @@ def get_query_planner():
     ).lower()
 
     if provider == "gemini":
-        return GeminiQueryPlanner()
+        from .finance_planner import GeminiFinancePlanner
+        return GeminiFinancePlanner()
 
     return OllamaQueryPlanner()
