@@ -32,6 +32,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _transactionError;
   String? _assistantError;
   AssistantReply? _reply;
+  // Conversation is intentionally held only in memory, not local storage.
+  final List<Map<String, String>> _chat = [];
 
   @override
   void initState() {
@@ -85,35 +87,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _askAssistant() async {
     final text = _question.text.trim();
-
     if (text.isEmpty || _asking) return;
+
+    final context = _chat.length <= 6
+        ? List<Map<String, String>>.from(_chat)
+        : _chat.sublist(_chat.length - 6);
 
     setState(() {
       _asking = true;
-      _reply = null;
       _assistantError = null;
+      _reply = null;
     });
 
     try {
-      final result = await _api.askAssistant(text);
-
+      final result = await _api.askAssistant(text, history: context);
       if (!mounted) return;
-
       setState(() {
+        _chat.add({'role': 'user', 'content': text});
+        _chat.add({'role': 'assistant', 'content': result.answer});
+        // Keep only recent exchanges in this screen.
+        if (_chat.length > 20) _chat.removeRange(0, _chat.length - 20);
         _reply = result;
+        _question.clear();
       });
     } catch (error) {
       if (!mounted) return;
-
       setState(() {
-        _assistantError = error.toString();
+        _assistantError = error is ApiException
+            ? error.message
+            : 'Could not answer. Please retry.';
       });
     } finally {
-      if (mounted) {
-        setState(() {
-          _asking = false;
-        });
-      }
+      if (mounted) setState(() => _asking = false);
     }
   }
 
@@ -220,12 +225,52 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 32),
 
-              Text(
-                'Ask SpendWise AI',
-                style: Theme.of(context).textTheme.titleLarge,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Ask SpendWise AI',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _chat.isEmpty || _asking ? null : () {
+                      setState(() {
+                        _chat.clear();
+                        _reply = null;
+                        _assistantError = null;
+                      });
+                    },
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Clear chat'),
+                  ),
+                ],
               ),
-
+              const Text(
+                'Ask follow-up questions about approved purchases. '
+                'Financial totals come from your saved data.',
+              ),
               const SizedBox(height: 12),
+              ..._chat.map((message) {
+                final isUser = message['role'] == 'user';
+                return Align(
+                  alignment: isUser
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isUser
+                          ? Theme.of(context).colorScheme.primaryContainer
+                          : Theme.of(context).colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: SelectableText(message['content'] ?? ''),
+                  ),
+                );
+              }),
 
               TextField(
                 controller: _question,
@@ -272,8 +317,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _reply!.answer,
-                          style: Theme.of(context).textTheme.bodyLarge,
+                          'Verified query results',
+                          style: Theme.of(context).textTheme.titleSmall,
                         ),
                         const SizedBox(height: 12),
                         const Text(
