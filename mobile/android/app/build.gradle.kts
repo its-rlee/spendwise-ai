@@ -1,16 +1,16 @@
 import java.io.FileInputStream
 import java.util.Properties
 
-val signingProperties = Properties()
-val signingFile = rootProject.file("key.properties")
-if (signingFile.exists()) {
-    signingProperties.load(FileInputStream(signingFile))
-}
-
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val signingProperties = Properties()
+val signingFile = rootProject.file("key.properties")
+if (signingFile.exists()) {
+    signingProperties.load(FileInputStream(signingFile))
 }
 
 android {
