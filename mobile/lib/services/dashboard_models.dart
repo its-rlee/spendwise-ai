@@ -24,7 +24,6 @@ class DashboardMonth {
   final String month, expenses, income;
   DashboardMonth(Map<String, dynamic> j)
       : month = j['month'].toString(),
-        comparisonBasis = j['comparison_basis'].toString(),
         expenses = j['expenses'].toString(),
         income = j['income'].toString();
 }
@@ -53,6 +52,7 @@ class SpendingDashboard {
   SpendingDashboard(Map<String, dynamic> j)
       : currency = j['currency'].toString(),
         month = j['month'].toString(),
+        comparisonBasis = j['comparison_basis'].toString(),
         expenses = j['this_month_expenses'].toString(),
         income = j['this_month_income'].toString(),
         net = j['this_month_net'].toString(),
