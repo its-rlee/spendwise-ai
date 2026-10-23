@@ -1,0 +1,44 @@
+# Free-tier demonstration deployment. Render explicitly does not recommend
+# Free Web Services for production; they sleep after 15 minutes of inactivity.
+services:
+  - type: web
+    name: spendwise-ai-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /ready
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: RECEIPT_AI_PROVIDER
+        value: gemini
+      - key: FINANCE_AI_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: AWS_EC2_METADATA_DISABLED
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      # Supabase Storage S3 credentials; keep bucket PRIVATE.
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_S3_BUCKET
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Exact site origin, e.g. https://its-rlee.github.io
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
