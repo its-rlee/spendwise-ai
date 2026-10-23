@@ -180,10 +180,13 @@ class SpendwiseApi {
     }).toList();
   }
 
-  Future<AssistantReply> askAssistant(String question) async {
+  Future<AssistantReply> askAssistant(
+    String question, {
+    List<Map<String, String>> history = const [],
+  }) async {
     final result = await _request(
       '/api/v1/assistant/ask',
-      body: {'question': question},
+      body: {'question': question, 'history': history},
     );
 
     return AssistantReply.fromJson(Map<String, dynamic>.from(result as Map));
