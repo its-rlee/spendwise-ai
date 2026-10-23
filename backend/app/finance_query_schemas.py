@@ -41,7 +41,7 @@ class FinanceQuery(BaseModel):
 
 class FinancePlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    queries: list[FinanceQuery] = Field(min_length=1, max_length=3)
+    queries: list[FinanceQuery] = Field(min_length=0, max_length=3)
 
 
 class ChatTurn(BaseModel):
