@@ -1,6 +1,8 @@
 
 from typing import Any, Literal
 
+from .finance_query_schemas import ChatTurn
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -17,6 +19,7 @@ class AssistantQuestion(BaseModel):
         min_length=8,
         max_length=300,
     )
+    history: list[ChatTurn] = Field(default_factory=list, max_length=6)
 
     @field_validator("question")
     @classmethod
