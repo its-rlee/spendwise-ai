@@ -456,6 +456,8 @@ class _TerminalActionButtonState extends State<TerminalActionButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null && !widget.busy;
     final active = enabled && _hovered;
+    final duration = MediaQuery.of(context).disableAnimations
+        ? Duration.zero : const Duration(milliseconds: 150);
     final background = widget.primary
         ? (active ? TerminalColors.bright : TerminalColors.phosphor)
         : (active ? TerminalColors.raised : TerminalColors.panel);
@@ -466,9 +468,9 @@ class _TerminalActionButtonState extends State<TerminalActionButton> {
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedScale(
         scale: _pressed && enabled ? 0.975 : 1,
-        duration: const Duration(milliseconds: 110),
+        duration: duration,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: duration,
           constraints: const BoxConstraints(minHeight: 52),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
